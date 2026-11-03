@@ -26,6 +26,8 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
 - **Errores de autenticación**: 401 si falta el token, ha caducado (`{ message: 'El token ha caducado' }`) o no es válido (`{ message: 'Token no válido' }`); 403 si hay sesión pero no el rol
   necesario.
 - **Usuario con sesión**: `GET /users/me` (con sesión, cualquier rol) responde `{ user: { _id, name, email, role } }`, a partir del token (`req.user`).
+- **Con quién abrir un Date**: `GET /users/directory` (con sesión, cualquier rol) responde `{ users: [{ _id, name, degree?, photo? }] }`: los demás usuarios
+  de rol `user` activos, ordenados por nombre.
 - **Usuario**: `{ _id, name, email, role, birthDate?, degree?, lookingFor?, bio?, photo?, active, deleted, deletedAt?, createdAt, updatedAt }`, nunca con
   contraseña. `photo` es una imagen PNG o JPG en base64 (`data:image/...;base64,...`, 200 000 caracteres como mucho).
 - **Usuarios inactivos y archivados**: no pueden iniciar sesión ni renovar el token (401 con el mensaje de siempre). Lo hace el prehook del modelo.
@@ -317,3 +319,14 @@ La bitácora del Seminario 7, de donde viene este código, se conserva en el tag
   planteada (Clara ya había votado a Hugo en el seed: el POST daba 409, que es lo correcto); se repite cambiando los dos votos a A+ y el
   Date se abre al formarse el A+ mutuo, y volver a poner A+ no abre un segundo Date. Eliminar a Laia (archivada) borra su Date.
 - Prompt de IA usado: «Igual con el modelo Date, el de las citas. ¿Qué atributos necesita para lo que queremos en Studate? Dame el plan de acción.»
+
+### 2026-11-03 · Con quién se puede abrir un Date
+
+- Al hacer las pantallas de Dates (frontend) salió que un usuario normal no tiene de dónde sacar la lista de personas para "Nuevo Date": `GET /users`
+  es solo del admin. Se añade `GET /users/directory` para cualquier usuario con sesión: los demás usuarios de rol `user` activos (el prehook ya quita
+  a los inactivos y archivados), ordenados por nombre y solo con `name`, `degree` y `photo`, que es lo que se ve de alguien en la app (nada de email
+  ni de rol). Va antes que `/:userId` en el router.
+- Validación ejecutada: `npm run build` y `npm run lint`; con curl, como `user@example.com` devuelve 8 usuarios: sin él mismo, sin el admin, sin los
+  inactivos y sin los archivados, y sin email; sin token, 401.
+- Prompt de IA usado: «Las pantallas de Dates, igual que las de La Orla: primero el mockup para verlo, y responsive desde el principio [...]»
+  (conversación del frontend).

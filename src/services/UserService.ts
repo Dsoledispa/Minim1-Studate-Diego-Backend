@@ -36,6 +36,13 @@ export const getUserById = async (userId: string): Promise<IUserProfile | null> 
     return profile;
 };
 
+// Funcion que devuelve la lista de usuarios con los que se puede abrir un Date: los demas usuarios
+// normales activos (el prehook ya quita a los inactivos y a los archivados), ordenados por nombre.
+// Solo se devuelven datos que cualquier usuario puede ver en la app: nombre, titulacion y foto
+export const getDirectory = (requesterId: string) => {
+    return User.find({ _id: { $ne: requesterId }, role: 'user' }).select('name degree photo').sort({ name: 1 });
+};
+
 // ---- Gestion de usuarios del backoffice (solo admin) ----
 
 // Funcion que busca una pagina de usuarios con los filtros del backoffice
@@ -129,4 +136,4 @@ export const deleteUser = async (userId: string): Promise<DeleteUserResult> => {
     return 'deleted';
 };
 
-export default { getUserById, getUsers, getUserForAdmin, createUser, updateUser, archiveUser, restoreUser, deleteUser };
+export default { getUserById, getDirectory, getUsers, getUserForAdmin, createUser, updateUser, archiveUser, restoreUser, deleteUser };

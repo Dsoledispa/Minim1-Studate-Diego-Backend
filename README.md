@@ -236,7 +236,7 @@ si su petición estaba bien formada.
 |---|---|
 | `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` | Cualquiera (refresh necesita la cookie con un refresh token válido) |
 | `/ping`, `/api-docs` | Cualquiera |
-| `/users/me` | Cualquier usuario con sesión |
+| `/users/me`, `/users/directory` | Cualquier usuario con sesión |
 | `/users`, `/users/:userId`, `/users/:userId/archive`, `/users/:userId/restore` (gestión de usuarios) | Solo `admin` |
 | `/grades` (votos de La Orla) | Solo `admin` |
 | `/dates` | Cualquier usuario con sesión, cada uno sus propios Dates; el admin, todos. Eliminar es solo del `admin` |
@@ -301,6 +301,7 @@ Todas las rutas salvo `/auth/*` y `/ping` necesitan la cabecera `Authorization: 
 | POST | `/auth/refresh` | Devuelve un access token nuevo: `{ token }`. Lee el refresh token de la cookie | |
 | POST | `/auth/logout` | Borra la cookie del refresh token (204) | |
 | GET | `/users/me` | Devuelve el usuario con sesión (`_id`, `name`, `email`, `role`). Lo saca de `req.user` | |
+| GET | `/users/directory` | Con quién puede abrir un Date el usuario con sesión: los demás usuarios activos (nombre, titulación y foto). Cualquier usuario con sesión | |
 | GET | `/users` | Lista los usuarios, paginados (`?page=&limit=&search=&role=&active=&degree=&archived=`). Solo admin | |
 | GET | `/users/:userId` | Devuelve un usuario, también si está inactivo o archivado. Solo admin | |
 | POST | `/users` | Crea un usuario con su rol y si está activo. Solo admin | `{ "name": "...", "email": "...", "password": "...", "role": "user" }` |
