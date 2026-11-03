@@ -4,12 +4,12 @@ import Logging from '../library/Logging';
 import { hashPassword } from '../utils/password';
 
 // Roles que puede tener un usuario.
-// admin gestiona el backoffice (autores y libros); user solo puede usar el chat.
+// admin entra en el backoffice; user es el usuario normal de la app.
 export const USER_ROLES = ['user', 'admin'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 // Definimos los datos que puede tener un usuario.
-// Un usuario es quien inicia sesion en la aplicacion; no tiene nada que ver con los autores de los libros.
+// Un usuario es quien inicia sesion en la aplicacion: un estudiante de la universidad o un admin.
 export interface IUser {
     name: string;
 
@@ -49,7 +49,7 @@ export interface IUserModel extends IUser, Document {}
 
 const UserSchema: Schema = new Schema(
     {
-        // El nombre es el que se ve en la aplicacion (por ejemplo, en el chat)
+        // El nombre es el que se ve en la aplicacion (por ejemplo, en La Orla o en un Date)
         name: { type: String, required: true, trim: true },
 
         // El email es con lo que se inicia sesion, asi que no puede repetirse.

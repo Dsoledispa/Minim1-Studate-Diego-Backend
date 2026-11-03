@@ -36,7 +36,7 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
 - [x] Crear los dos repositorios a partir del Seminari 7 (README y ramas) · Diego
 - [x] Montar el GitHub Project y cargar las tareas · María
 - [x] Hoja de horas del equipo · Miguel Ángel
-- [ ] Quitar autores, libros y chat del backend · María
+- [x] Quitar autores, libros y chat del backend · María
 
 #### Usuarios (`users`)
 
@@ -80,3 +80,24 @@ La bitácora del Seminario 7, de donde viene este código, se conserva en el tag
 - Prompt de IA usado: «Lo que hemos hecho ha sido copiar y pegar lo que teníamos del seminario 7. Ahora hay que
   adaptarlo a lo nuestro, que es Studate. Para eso hay que hacer limpieza y dejar el repo preparado [...] Dime
   el plan de acción.» (conversación completa en `prompts/sprint-1.md`, fuera del repositorio).
+
+### 2026-11-03 · Limpieza: fuera autores, libros y chat
+
+- Se borran los modelos, controllers, services y rutas de autores y libros, el modelo `Message`, la carpeta
+  `sockets/` (chat y avisos del backoffice), el middleware `SocketAuth` y los dos scripts de migración del
+  seminario (`migrate-authors` y `migrate-indexes`), con sus comandos de `package.json`. Se desinstala `socket.io`.
+- `server.ts` deja de montar `/authors`, `/books` y socket.io; sigue creando el servidor con `http.createServer`.
+- Desaparece `GET /users` (la lista de id y nombre para el chat directo). `GET /users/me` se queda: el frontend lo
+  usa para recuperar la sesión.
+- Se quedan las piezas genéricas que se van a reutilizar: `ValidatePagination` y el esquema de paginación de Joi,
+  `ValidateId`, `ErrorHandler`, `RequireRole`, `VerifyToken`, `escapeRegExp` y las respuestas comunes de Swagger.
+- El seed solo crea los dos usuarios; la rama `users` lo amplía.
+- README: fuera las secciones del chat, de autores y libros y de las migraciones; la estructura del proyecto,
+  los endpoints y la tabla de rutas protegidas quedan al día.
+- Decisión: quitar en lugar de comentar. El código del seminario sigue entero en el tag `seminari7-base`
+  (`git show seminari7-base:src/services/BookService.ts`), que es de donde se copiará la forma de la paginación y
+  del borrado lógico.
+- Validación ejecutada: `npm run build` y `npm run lint` sin errores; `npm run seed -- --reset`; con la API
+  arrancada, 8 pruebas con curl: login 200, `/users/me` 200 con token y 401 sin él, `/authors`, `/books` y `GET /users`
+  404, `/api-docs` y `/ping` 200, y el documento de Swagger ya no tiene ninguna ruta ni esquema de autores o libros.
+- Prompt de IA usado: el mismo de la limpieza del repositorio (ver la entrada anterior).

@@ -8,13 +8,9 @@ import Logging from './library/Logging';
 import Logger from './middleware/Logger';
 import ErrorHandler from './middleware/ErrorHandler';
 import authRoutes from './routes/Auth';
-import authorRoutes from './routes/Author';
-import bookRoutes from './routes/Book';
 import swaggerUi from 'swagger-ui-express'; // permite mostrar Swagger en el navegador.
 import swaggerDocument from './config/swagger'; // importa el documento que hemos creado en swagger.ts
 import userRoutes from './routes/Users';
-import { StartChat } from './sockets/Chat';
-import { StartNotifications } from './sockets/Notifications';
 
 const router = express();
 
@@ -44,8 +40,6 @@ const StartServer = () => {
     // Cada router protege sus propias rutas con VerifyToken y RequireRole (ver src/routes/).
     // /auth es publica: registro, login, refresh y logout.
     router.use('/auth', authRoutes);
-    router.use('/authors', authorRoutes);
-    router.use('/books', bookRoutes);
     router.use('/users', userRoutes);
 
     // La documentacion y el healthcheck son publicos
@@ -75,12 +69,8 @@ const StartServer = () => {
 
     router.use(ErrorHandler);
 
-    // Express y socket.io comparten el mismo servidor HTTP (y el mismo puerto)
+    // Creamos el servidor HTTP con Express y lo ponemos a escuchar en el puerto del .env
     const server = http.createServer(router);
-
-    /** socket.io: el chat y, con el mismo servidor, los avisos del backoffice */
-    const io = StartChat(server);
-    StartNotifications(io);
 
     server.listen(config.server.port, () => Logging.info(`Server is running on port ${config.server.port}`));
 };
