@@ -46,6 +46,7 @@ export = router;
  *     description: >
  *       Devuelve el access token (para la cabecera Authorization) y el usuario. El refresh token no va en el JSON:
  *       se deja en la cookie HttpOnly `refreshToken` (SameSite=Strict, Path=/auth, 7 dias; Secure en produccion).
+ *       Un usuario inactivo o archivado recibe 401, con el mismo mensaje que una contraseña incorrecta.
  *     security: []
  *     requestBody:
  *       required: true

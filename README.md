@@ -393,13 +393,33 @@ esquemas de Joi que validan las peticiones, así que la documentación no puede 
 cuando se añade o se quita un campo.
 
 Las piezas comunes (datos generales, esquemas, respuestas de error y el esquema de seguridad
-`bearerAuth`) están en `src/config/swagger.ts`. En `src/routes/Auth.ts` la documentación va debajo
+`bearerAuth`) están en `src/config/swagger.ts`. Cada respuesta de error lleva de ejemplo el mensaje que
+devuelve de verdad la API (por ejemplo, `NotArchived`, `OwnUser`, `GradeConflict` o `DateConflict`), para
+que quien hace el frontend sepa qué va a recibir. Las rutas están agrupadas por etiquetas: Health, Auth,
+Users, Grades y Dates. En `src/routes/Auth.ts` la documentación va debajo
 del código, para que el router se lea de un vistazo.
 
 Para probar las rutas protegidas desde Swagger: ejecuta `POST /auth/login`, copia el `token` de la
 respuesta, pulsa el botón **Authorize** de arriba a la derecha y pégalo (solo el token, sin la palabra
 `Bearer`). A partir de ahí Swagger envía la cabecera en todas las peticiones. Las rutas con candado son
 las que lo necesitan.
+
+## Cómo se ha probado la API
+
+No hay tests automáticos en el backend. Al cerrar cada rama se prueba lo hecho contra la API arrancada y
+con la base de datos recién sembrada (`npm run seed -- --reset`), con curl, también los casos de error: sin
+token, con el rol que no toca, con ids que no existen o mal formados, con el body mal y con las reglas de
+cada recurso (archivar antes de eliminar, un voto por pareja, una prórroga por Date...). Cada entrada de la
+bitácora de [LOGS.md](LOGS.md) dice qué se probó y cuántas pruebas salieron bien. Un ejemplo:
+
+```
+curl -c cookies.txt -X POST http://localhost:1337/auth/login -H "Content-Type: application/json" -d '{"email":"admin@example.com","password":"studate26"}'
+curl "http://localhost:1337/users?archived=true" -H "Authorization: Bearer <token>"
+curl -X DELETE http://localhost:1337/users/<id de un usuario no archivado> -H "Authorization: Bearer <token>"
+```
+
+La última responde 409 "Archiva el usuario antes de eliminarlo". Las mismas pruebas se pueden hacer desde
+la página de Swagger.
 
 ## Cómo contribuir
 

@@ -145,7 +145,7 @@ const swaggerDocument = swaggerJsdoc({
         tags: [
             { name: 'Health', description: 'Comprobar que la API responde' },
             { name: 'Auth', description: 'Registro, login, renovación del token y logout' },
-            { name: 'Users', description: 'Usuarios: el de la sesión y la gestión de usuarios del backoffice (solo admin)' },
+            { name: 'Users', description: 'Usuarios: el de la sesión, con quién abrir un Date y la gestión de usuarios del backoffice (solo admin)' },
             { name: 'Grades', description: 'Votos de La Orla: A+ o F de un usuario a otro (solo admin)' },
             { name: 'Dates', description: 'Citas entre dos usuarios que se han dado A+ (el admin ve todas; un usuario, las suyas)' }
         ],
@@ -187,7 +187,10 @@ const swaggerDocument = swaggerJsdoc({
                     { token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...', user: userExample }
                 ),
                 BadCredentials: errorResponse('El email o la contraseña no son correctos', 'Email o contraseña incorrectos'),
-                Unauthorized: errorResponse('Falta el token, ha caducado o no es válido', 'El token ha caducado'),
+                Unauthorized: errorResponse(
+                    'Falta el token, ha caducado, no es válido o la cuenta ya no está activa ("Tu cuenta no está activa")',
+                    'El token ha caducado'
+                ),
                 Forbidden: errorResponse('El usuario no tiene el rol necesario', 'Necesitas el rol admin'),
                 GradeOne: okResponse('Un voto, con los datos de los dos usuarios', { type: 'object', properties: { grade: gradeSchema } }, { grade: gradeExample }),
                 GradeList: okResponse(
@@ -218,6 +221,9 @@ const swaggerDocument = swaggerJsdoc({
                     { dates: [dateExample], total: 4, page: 1, pages: 1 }
                 ),
                 AlreadyExtended: errorResponse('La prórroga solo se puede usar una vez', 'La prórroga de este Date ya se ha usado'),
+                GradeConflict: errorResponse('Ese usuario ya ha votado ese perfil (para cambiar la nota, PUT)', 'Este usuario ya ha votado ese perfil'),
+                DateConflict: errorResponse('Ya hay un Date entre esos dos usuarios', 'Ya hay un Date entre estos dos usuarios'),
+                NotYourDate: errorResponse('Un usuario normal solo puede abrir Dates en los que está él', 'Solo puedes abrir Dates en los que estés tú'),
                 NotArchived: errorResponse('Solo se puede eliminar para siempre un usuario archivado', 'Archiva el usuario antes de eliminarlo'),
                 OwnUser: errorResponse('Un admin no puede hacer esto con su propio usuario', 'No puedes hacer esto con tu propio usuario'),
                 UserOne: okResponse('Un usuario', { type: 'object', properties: { user: userSchema } }, { user: userExample }),

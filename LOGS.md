@@ -97,8 +97,8 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
 
 #### Documentación (`docs`)
 
-- [ ] Documentación de la API en Swagger · Diego
-- [ ] Pruebas de la API (se hacen al cerrar cada rama y se apuntan en la bitácora) · Diego
+- [x] Documentación de la API en Swagger · Diego
+- [x] Pruebas de la API (se hacen al cerrar cada rama y se apuntan en la bitácora) · Diego
 
 #### Scrum
 
@@ -341,3 +341,26 @@ La bitácora del Seminario 7, de donde viene este código, se conserva en el tag
   "from ya existe").
 - Prompt de IA usado: «Toca montar la documentación de la API en Swagger. Ya has visto cómo lo hacemos: Joi conectado con Swagger.
   Simplemente sería ampliarlo con todo lo nuevo.» (salió durante el repaso).
+
+### 2026-11-03 · Repaso de la documentación de Swagger
+
+- Cada ruta se documentó al crearla, con `@openapi` encima y los esquemas del body sacados de Joi con `joi-to-swagger`. En esta tarea se
+  compara el documento generado (`/api-docs`) con las rutas reales: están las 25 rutas, con su etiqueta (Health, Auth, Users, Grades y
+  Dates), y solo `/auth/*` y `/ping` van sin candado.
+- Se revisa, ruta por ruta, que los códigos documentados sean los que responde cada controller. Arreglado:
+  - El 401 (`Unauthorized`) ahora dice que también sale cuando la cuenta ya no está activa ("Tu cuenta no está activa"), y el login avisa de
+    que un usuario inactivo o archivado recibe 401.
+  - `POST /grades` 409, `POST /dates` 409 y `POST /dates` 403 usaban las respuestas genéricas (con el ejemplo "email ya existe" o "Necesitas
+    el rol admin"): ahora tienen las suyas (`GradeConflict`, `DateConflict` y `NotYourDate`) con el mensaje real. Al revisar el de los votos
+    salió que el mensaje real era "from ya existe", y se arregló en el backend (entrada anterior).
+  - `DELETE /users/:userId` dice que borra también los votos y los Dates del usuario, y el tag Users menciona `/users/directory`.
+- README: cómo se ha probado la API y qué tiene cada respuesta de error de Swagger.
+- Pruebas de la API: no hay tests automáticos en el backend. Al cerrar cada rama se han hecho las pruebas con curl contra la API y el seed
+  recién hecho, y están en la bitácora: 8 de la limpieza, 6 del prehook, 30 de la gestión de usuarios, 18 del archivado, 19 de La Orla y 27 de
+  los Dates (más la del match repetida), además de las de cada arreglo. Se marca la tarea con eso; los tests automáticos quedan como mejora
+  para el Sprint 2.
+- Validación ejecutada: `npm run build` y `npm run lint` sin errores; el documento de Swagger generado tiene las 25 rutas y los esquemas User,
+  Grade, Date y sus Input; la página `/api-docs` carga con las 5 etiquetas, las 25 rutas con su candado (o sin él en `/auth/*` y `/ping`) y
+  los esquemas. Las llamadas se han probado con curl, no desde los botones de la página.
+- Prompt de IA usado: «Toca montar la documentación de la API en Swagger. Ya has visto cómo lo hacemos: Joi conectado con Swagger.
+  Simplemente sería ampliarlo con todo lo nuevo.»
