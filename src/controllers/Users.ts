@@ -30,6 +30,17 @@ const readMe = async (req: Request, res: Response, next: NextFunction) => {
     }
 };
 
+// Devuelve con quien puede abrir un Date el usuario con sesion (todos menos el)
+const readDirectory = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const users = await UserService.getDirectory(req.user!.id);
+
+        res.status(200).json({ users });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // ---- Gestion de usuarios del backoffice (solo admin) ----
 
 // Función para obtener una pagina de usuarios con los filtros del backoffice
@@ -173,4 +184,4 @@ const deleteUser = async (req: Request<{ userId: string }>, res: Response, next:
     }
 };
 
-export default { readMe, listUsers, readUser, createUser, updateUser, archiveUser, restoreUser, deleteUser };
+export default { readMe, readDirectory, listUsers, readUser, createUser, updateUser, archiveUser, restoreUser, deleteUser };

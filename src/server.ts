@@ -8,6 +8,7 @@ import Logging from './library/Logging';
 import Logger from './middleware/Logger';
 import ErrorHandler from './middleware/ErrorHandler';
 import authRoutes from './routes/Auth';
+import dateRoutes from './routes/Date';
 import gradeRoutes from './routes/Grade';
 import swaggerUi from 'swagger-ui-express'; // permite mostrar Swagger en el navegador.
 import swaggerDocument from './config/swagger'; // importa el documento que hemos creado en swagger.ts
@@ -43,6 +44,7 @@ const StartServer = () => {
     router.use('/auth', authRoutes);
     router.use('/users', userRoutes);
     router.use('/grades', gradeRoutes);
+    router.use('/dates', dateRoutes);
 
     // La documentacion y el healthcheck son publicos
     router.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));

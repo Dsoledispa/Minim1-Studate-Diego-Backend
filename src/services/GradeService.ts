@@ -1,6 +1,7 @@
 import Grade, { GradeValue, IGrade } from '../models/Grade';
 import User from '../models/User';
 import type { GradeListQuery } from '../middleware/Joi';
+import { openDateIfMutual } from './DateService';
 
 // Al devolver un voto, cambiamos el id de from y to por los datos del usuario (populate).
 // Ojo con el prehook de User: populate tambien hace una consulta a User, y sin withInactive un
@@ -64,13 +65,31 @@ export const createGrade = async (data: IGrade) => {
 
     const created = await Grade.create(data);
 
+    // El "match" de Studate: si este voto es un A+ y el otro ya le habia dado A+, se abre un Date
+    if (created.value === 'A+') {
+        await openDateIfMutual(String(created.from), String(created.to));
+    }
+
     return { grade: await getGradeById(String(created._id)) };
 };
 
 // Funcion que cambia la nota de un voto (de A+ a F o al reves).
 // Con new: true devolvemos el voto ya cambiado
-export const updateGrade = (gradeId: string, value: GradeValue) => {
-    return Grade.findByIdAndUpdate(gradeId, { value }, { new: true }).populate(POPULATE_USERS);
+export const updateGrade = async (gradeId: string, value: GradeValue) => {
+    const grade = await Grade.findByIdAndUpdate(gradeId, { value }, { new: true });
+
+    if (!grade) {
+        return null;
+    }
+
+    // Si ahora es un A+, puede que se haya formado un match (igual que al crear un voto).
+    // Cambiar un A+ a F no cierra el Date que ya estuviera abierto
+    if (value === 'A+') {
+        await openDateIfMutual(String(grade.from), String(grade.to));
+    }
+
+    // Al final cambiamos los ids de from y to por los datos de los usuarios
+    return grade.populate(POPULATE_USERS);
 };
 
 // Funcion que elimina un voto. Es un borrado fisico: un voto no se archiva, o existe o no existe

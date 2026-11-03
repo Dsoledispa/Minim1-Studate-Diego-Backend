@@ -33,6 +33,27 @@ router.get('/me', VerifyToken, controller.readMe);
 
 /**
  * @openapi
+ * /users/directory:
+ *   get:
+ *     tags: [Users]
+ *     summary: Usuarios con los que se puede abrir un Date
+ *     description: >
+ *       Cualquier usuario con sesión. Los demás usuarios normales activos, ordenados por nombre, solo con su nombre,
+ *       su titulación y su foto.
+ *     responses:
+ *       200:
+ *         description: Los usuarios
+ *         content:
+ *           application/json:
+ *             example: { users: [{ _id: 6ab3f2fe9c500204a7d5f8a3, name: Laia Puig, degree: Grau en Enginyeria Telemàtica }] }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ */
+
+// Con quien se puede abrir un Date. Tambien va antes que /:userId
+router.get('/directory', VerifyToken, controller.readDirectory);
+
+/**
+ * @openapi
  * /users:
  *   get:
  *     tags: [Users]

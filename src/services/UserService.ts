@@ -1,3 +1,4 @@
+import DateModel from '../models/Date';
 import Grade from '../models/Grade';
 import User, { IUser, UserRole } from '../models/User';
 import type { UserListQuery } from '../middleware/Joi';
@@ -33,6 +34,13 @@ export const getUserById = async (userId: string): Promise<IUserProfile | null> 
     };
 
     return profile;
+};
+
+// Funcion que devuelve la lista de usuarios con los que se puede abrir un Date: los demas usuarios
+// normales activos (el prehook ya quita a los inactivos y a los archivados), ordenados por nombre.
+// Solo se devuelven datos que cualquier usuario puede ver en la app: nombre, titulacion y foto
+export const getDirectory = (requesterId: string) => {
+    return User.find({ _id: { $ne: requesterId }, role: 'user' }).select('name degree photo').sort({ name: 1 });
 };
 
 // ---- Gestion de usuarios del backoffice (solo admin) ----
@@ -119,13 +127,13 @@ export const deleteUser = async (userId: string): Promise<DeleteUserResult> => {
         return 'not-archived';
     }
 
-    // Con el usuario se borran sus votos de La Orla (los que dio y los que recibio): si no, quedarian
-    // votos que apuntan a un usuario que ya no existe.
-    // Cuando existan los Dates, aqui se borraran tambien los del usuario
+    // Con el usuario se borran sus votos de La Orla (los que dio y los que recibio) y sus Dates: si no,
+    // quedarian datos que apuntan a un usuario que ya no existe
     await Grade.deleteMany({ $or: [{ from: userId }, { to: userId }] });
+    await DateModel.deleteMany({ users: userId });
     await User.deleteOne({ _id: userId });
 
     return 'deleted';
 };
 
-export default { getUserById, getUsers, getUserForAdmin, createUser, updateUser, archiveUser, restoreUser, deleteUser };
+export default { getUserById, getDirectory, getUsers, getUserForAdmin, createUser, updateUser, archiveUser, restoreUser, deleteUser };
