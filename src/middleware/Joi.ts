@@ -2,6 +2,7 @@ import Joi, { ObjectSchema } from 'joi';
 
 import { NextFunction, Request, Response } from 'express';
 
+import { GRADE_VALUES, GradeValue, IGrade } from '../models/Grade';
 import { IUser, PHOTO_MAX_LENGTH, USER_ROLES, UserRole } from '../models/User';
 
 export interface PaginationQuery {
@@ -17,6 +18,14 @@ export interface UserListQuery extends PaginationQuery {
     active?: boolean;
     degree?: string;
     archived: boolean;
+}
+
+// Los filtros del listado de votos de La Orla: la paginacion, la nota y un usuario
+export interface GradeListQuery {
+    page: number;
+    limit: number;
+    value?: GradeValue;
+    user?: string;
 }
 
 // Funcion que se encarga de validar los datos que llegan en una petición
@@ -107,6 +116,18 @@ export const Schemas = {
         archived: Joi.boolean().default(false)
     }),
 
+    // Validacion de los filtros del listado de votos
+    gradeList: Joi.object<GradeListQuery>({
+        page: Joi.number().integer().min(1).default(1),
+        limit: Joi.number().integer().min(1).max(100).default(5),
+
+        // Solo los A+ o solo los F
+        value: Joi.string().valid(...GRADE_VALUES),
+
+        // Solo los votos en los que participa este usuario (dando o recibiendo la nota)
+        user: Joi.string().regex(OBJECT_ID)
+    }),
+
     // Validaciones de las rutas de autenticacion
     auth: {
         // Registro: nombre, email y contraseña.
@@ -154,11 +175,46 @@ export const Schemas = {
 
             ...userProfile
         })
+    },
+
+    // Validaciones de los votos de La Orla
+    grade: {
+        // Esquema que se utiliza cuando el admin crea un voto
+        create: Joi.object<IGrade>({
+            // Quien vota y a quien: dos ids de usuario con formato de MongoDB
+            from: Joi.string().regex(OBJECT_ID).required().example('6ab3f2fe9c500204a7d5f8a3'),
+            to: Joi.string().regex(OBJECT_ID).required().example('6ab3f2fe9c500204a7d5f8a4'),
+
+            // La nota tiene que ser A+ o F
+            value: Joi.string()
+                .valid(...GRADE_VALUES)
+                .required()
+                .example('A+')
+        }),
+
+        // Esquema que se utiliza para cambiar la nota: los usuarios de un voto no se cambian
+        update: Joi.object<IGrade>({
+            value: Joi.string()
+                .valid(...GRADE_VALUES)
+                .required()
+        })
     }
 };
 
 export const ValidatePagination = (req: Request, res: Response, next: NextFunction) => {
     const { error, value } = Schemas.pagination.validate(req.query);
+
+    if (error) {
+        return res.status(400).json({ message: error.details[0].message });
+    }
+
+    res.locals.query = value;
+    next();
+};
+
+// Igual que ValidatePagination, pero con los filtros del listado de votos
+export const ValidateGradeList = (req: Request, res: Response, next: NextFunction) => {
+    const { error, value } = Schemas.gradeList.validate(req.query);
 
     if (error) {
         return res.status(400).json({ message: error.details[0].message });

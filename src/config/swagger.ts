@@ -13,6 +13,8 @@ const { swagger: registerInput } = j2s(Schemas.auth.register);
 const { swagger: loginInput } = j2s(Schemas.auth.login);
 const { swagger: userInput } = j2s(Schemas.user.create);
 const { swagger: userUpdateInput } = j2s(Schemas.user.update);
+const { swagger: gradeInput } = j2s(Schemas.grade.create);
+const { swagger: gradeUpdateInput } = j2s(Schemas.grade.update);
 
 // Lo que devuelve la API no es igual a lo que se envía: lleva el _id y las fechas que
 // pone MongoDB, y el usuario nunca devuelve la contraseña.
@@ -78,6 +80,31 @@ const userExample = {
     updatedAt: '2026-11-03T10:00:00.000Z'
 };
 
+// Un voto de La Orla: from y to llegan con los datos del usuario (populate), no solo con su id
+const userSummary = {
+    type: 'object',
+    properties: { _id: { type: 'string' }, name: { type: 'string' }, email: { type: 'string' }, photo: { type: 'string' } }
+};
+
+const gradeSchema = {
+    type: 'object',
+    properties: {
+        ...storedFields,
+        from: userSummary,
+        to: userSummary,
+        value: { type: 'string', enum: ['A+', 'F'] }
+    }
+};
+
+const gradeExample = {
+    _id: '6ab3f2fe9c500204a7d5f901',
+    from: { _id: '6ab3f2fe9c500204a7d5f8a3', name: 'Laia Puig', email: 'laia@example.com' },
+    to: { _id: '6ab3f2fe9c500204a7d5f8a4', name: 'Pau Ferrer', email: 'pau@example.com' },
+    value: 'A+',
+    createdAt: '2026-11-03T10:00:00.000Z',
+    updatedAt: '2026-11-03T10:00:00.000Z'
+};
+
 const swaggerPath = (filePath: string) => filePath.replace(/\\/g, '/');
 
 const swaggerDocument = swaggerJsdoc({
@@ -92,7 +119,8 @@ const swaggerDocument = swaggerJsdoc({
         tags: [
             { name: 'Health', description: 'Comprobar que la API responde' },
             { name: 'Auth', description: 'Registro, login, renovación del token y logout' },
-            { name: 'Users', description: 'Usuarios: el de la sesión y la gestión de usuarios del backoffice (solo admin)' }
+            { name: 'Users', description: 'Usuarios: el de la sesión y la gestión de usuarios del backoffice (solo admin)' },
+            { name: 'Grades', description: 'Votos de La Orla: A+ o F de un usuario a otro (solo admin)' }
         ],
         // Por defecto todas las rutas piden el token (el candado de Swagger).
         // Las rutas públicas lo quitan con security: [] en su comentario @openapi.
@@ -111,7 +139,10 @@ const swaggerDocument = swaggerJsdoc({
                 LoginInput: loginInput,
                 UserInput: userInput,
                 UserUpdateInput: userUpdateInput,
-                User: userSchema
+                User: userSchema,
+                GradeInput: gradeInput,
+                GradeUpdateInput: gradeUpdateInput,
+                Grade: gradeSchema
             },
             responses: {
                 LoginOk: okResponse(
@@ -128,6 +159,20 @@ const swaggerDocument = swaggerJsdoc({
                 BadCredentials: errorResponse('El email o la contraseña no son correctos', 'Email o contraseña incorrectos'),
                 Unauthorized: errorResponse('Falta el token, ha caducado o no es válido', 'El token ha caducado'),
                 Forbidden: errorResponse('El usuario no tiene el rol necesario', 'Necesitas el rol admin'),
+                GradeOne: okResponse('Un voto, con los datos de los dos usuarios', { type: 'object', properties: { grade: gradeSchema } }, { grade: gradeExample }),
+                GradeList: okResponse(
+                    'Una página de votos y los datos de paginación',
+                    {
+                        type: 'object',
+                        properties: {
+                            grades: { type: 'array', items: gradeSchema },
+                            total: { type: 'integer', example: 25 },
+                            page: { type: 'integer', example: 1 },
+                            pages: { type: 'integer', example: 5 }
+                        }
+                    },
+                    { grades: [gradeExample], total: 25, page: 1, pages: 5 }
+                ),
                 NotArchived: errorResponse('Solo se puede eliminar para siempre un usuario archivado', 'Archiva el usuario antes de eliminarlo'),
                 OwnUser: errorResponse('Un admin no puede hacer esto con su propio usuario', 'No puedes hacer esto con tu propio usuario'),
                 UserOne: okResponse('Un usuario', { type: 'object', properties: { user: userSchema } }, { user: userExample }),

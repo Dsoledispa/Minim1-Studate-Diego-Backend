@@ -99,8 +99,8 @@ del proyecto.
 ## Llenar la base de datos (la primera vez)
 
 Si arrancas con la base de datos vacía, la API funciona pero no devuelve nada y no hay ningún usuario
-con el que iniciar sesión. Para tener datos con los que probar, hay 14 usuarios de ejemplo en
-`src/seed-data.ts`: un admin, un usuario normal y doce estudiantes con su perfil. De los estudiantes,
+con el que iniciar sesión. Para tener datos con los que probar, hay 14 usuarios y 25 votos de La Orla de
+ejemplo en `src/seed-data.ts`: un admin, un usuario normal y doce estudiantes con su perfil. De los estudiantes,
 dos están inactivos y dos archivados, para poder probar el prehook de activos y el borrado lógico:
 
 ```
@@ -143,7 +143,7 @@ src/
   library/         Utilidades compartidas
     Logging.ts       Mensajes de consola con fecha y color (info, warning, error)
   routes/          El mapa de URLs: qué petición va a qué controller
-    Auth.ts, Users.ts
+    Auth.ts, Users.ts, Grade.ts
   middleware/      Lo que se ejecuta entre la ruta y el controller
     VerifyToken.ts   Comprueba el token de la cabecera Authorization y deja el usuario en req.user (401).
                      Aquí se amplía también el tipo Request de Express con req.user
@@ -153,11 +153,12 @@ src/
     Logger.ts        Escribe en consola cada petición y su código de respuesta
     ErrorHandler.ts  Convierte cualquier error en su código: 400, 401, 404, 409, 422 o 500
   controllers/     Leen la petición (req), llaman al service y eligen la respuesta (res)
-    Auth.ts, Users.ts
+    Auth.ts, Users.ts, Grade.ts
   services/        Leen y escriben en la base de datos a través de los models. No saben que existe HTTP
-    AuthService.ts, UserService.ts
+    AuthService.ts, UserService.ts, GradeService.ts
   models/          Esquemas de Mongoose y las interfaces de cada recurso
     User.ts          Usuario, y las interfaces de los tokens (payload) y de req.user
+    Grade.ts         Voto de La Orla (A+ o F de un usuario a otro)
   utils/           Funciones pequeñas sin dependencias de Express
     password.ts      Cifra y comprueba contraseñas con scrypt
     escape-regexp.ts Escapa el texto de una búsqueda para usarlo en una expresión regular
@@ -236,6 +237,7 @@ si su petición estaba bien formada.
 | `/ping`, `/api-docs` | Cualquiera |
 | `/users/me` | Cualquier usuario con sesión |
 | `/users`, `/users/:userId`, `/users/:userId/archive`, `/users/:userId/restore` (gestión de usuarios) | Solo `admin` |
+| `/grades` (votos de La Orla) | Solo `admin` |
 
 Decisiones y límites, porque es un proyecto de clase:
 
@@ -303,7 +305,12 @@ Todas las rutas salvo `/auth/*` y `/ping` necesitan la cabecera `Authorization: 
 | PUT | `/users/:userId` | Edita un usuario, su rol y si está activo (no la contraseña). Solo admin | `{ "name": "...", "email": "...", "role": "user", "active": true }` |
 | POST | `/users/:userId/archive` | Archiva un usuario (borrado lógico). Solo admin | |
 | POST | `/users/:userId/restore` | Restaura un usuario archivado. Solo admin | |
-| DELETE | `/users/:userId` | Elimina para siempre un usuario archivado (borrado físico). Solo admin | |
+| DELETE | `/users/:userId` | Elimina para siempre un usuario archivado (borrado físico) y sus votos. Solo admin | |
+| GET | `/grades` | Lista los votos de La Orla, paginados (`?page=&limit=&value=&user=`). Solo admin | |
+| GET | `/grades/:gradeId` | Devuelve un voto, con los datos de los dos usuarios. Solo admin | |
+| POST | `/grades` | Crea un voto. Solo admin | `{ "from": "<id>", "to": "<id>", "value": "A+" }` |
+| PUT | `/grades/:gradeId` | Cambia la nota de un voto. Solo admin | `{ "value": "F" }` |
+| DELETE | `/grades/:gradeId` | Elimina un voto (borrado físico). Solo admin | |
 Un usuario tiene `name`, `email` y `role` (`user` o `admin`), los datos de su perfil (`birthDate`,
 `degree` o titulación, `lookingFor` o "Qué busco", `bio` y `photo`) y el estado de su cuenta: `active`
 (si un admin lo ha desactivado) y `deleted` con `deletedAt` (si está archivado). La contraseña nunca se
@@ -321,6 +328,12 @@ solo los de un rol; `active=true` o `active=false`, solo los activos o los inact
 (el texto entero); y `archived=true`,
 solo los archivados (por defecto no salen). Un admin no puede cambiarse su propio rol ni desactivarse:
 responde 403 "No puedes hacer esto con tu propio usuario", para que el backoffice no se quede sin admin.
+
+Un voto de La Orla (`Grade`) es la nota que un usuario (`from`) le pone al perfil de otro (`to`): `A+`
+(aprobado, me interesa) o `F` (suspenso). En las respuestas, `from` y `to` llegan con el nombre, el email
+y la foto del usuario (`populate`), también si está inactivo. Cada usuario solo puede votar una vez a
+cada perfil (409 si se repite) y nadie se puede votar a sí mismo (422). `value` filtra por nota y `user`
+deja los votos en los que participa un usuario. Un voto no se archiva: eliminarlo es un borrado físico.
 
 Códigos de respuesta: 201 al crear, 200 al leer o modificar, 204 al borrar, 400 si el id de la URL
 no tiene forma de id de MongoDB, 401 si falta el token o no es válido, 403 si el usuario no tiene el

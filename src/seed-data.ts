@@ -1,3 +1,4 @@
+import { GradeValue } from './models/Grade';
 import { IUser } from './models/User';
 
 // Datos de ejemplo para llenar la base de datos.
@@ -184,4 +185,42 @@ export const usersSeed: IUser[] = [
         deleted: true,
         deletedAt: new Date('2026-10-30')
     }
+];
+
+// Votos de La Orla. Cada voto dice quién vota y a quién con sus emails: el script del seed los cambia
+// por los ids que MongoDB les ha dado. Solo votan usuarios activos.
+// Hay cuatro parejas que se han dado A+ mutuamente (Laia y Pau, Nerea y Marc, Hugo y Júlia,
+// Usuario y Oriol): son las que tendrán un Date.
+export interface GradeSeed {
+    from: string;
+    to: string;
+    value: GradeValue;
+}
+
+export const gradesSeed: GradeSeed[] = [
+    { from: 'laia@example.com', to: 'pau@example.com', value: 'A+' },
+    { from: 'pau@example.com', to: 'laia@example.com', value: 'A+' },
+    { from: 'nerea@example.com', to: 'marc@example.com', value: 'A+' },
+    { from: 'marc@example.com', to: 'nerea@example.com', value: 'A+' },
+    { from: 'hugo@example.com', to: 'julia@example.com', value: 'A+' },
+    { from: 'julia@example.com', to: 'hugo@example.com', value: 'A+' },
+    { from: 'user@example.com', to: 'oriol@example.com', value: 'A+' },
+    { from: 'oriol@example.com', to: 'user@example.com', value: 'A+' },
+    { from: 'laia@example.com', to: 'marc@example.com', value: 'F' },
+    { from: 'laia@example.com', to: 'hugo@example.com', value: 'A+' },
+    { from: 'pau@example.com', to: 'julia@example.com', value: 'A+' },
+    { from: 'pau@example.com', to: 'nerea@example.com', value: 'F' },
+    { from: 'nerea@example.com', to: 'laia@example.com', value: 'A+' },
+    { from: 'nerea@example.com', to: 'oriol@example.com', value: 'F' },
+    { from: 'marc@example.com', to: 'clara@example.com', value: 'A+' },
+    { from: 'hugo@example.com', to: 'clara@example.com', value: 'F' },
+    { from: 'clara@example.com', to: 'hugo@example.com', value: 'F' },
+    { from: 'clara@example.com', to: 'oriol@example.com', value: 'A+' },
+    { from: 'julia@example.com', to: 'user@example.com', value: 'A+' },
+    { from: 'julia@example.com', to: 'pau@example.com', value: 'F' },
+    { from: 'oriol@example.com', to: 'laia@example.com', value: 'F' },
+    { from: 'oriol@example.com', to: 'nerea@example.com', value: 'A+' },
+    { from: 'user@example.com', to: 'clara@example.com', value: 'F' },
+    { from: 'user@example.com', to: 'laia@example.com', value: 'A+' },
+    { from: 'marc@example.com', to: 'pau@example.com', value: 'F' }
 ];
