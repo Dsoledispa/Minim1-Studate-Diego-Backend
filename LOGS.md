@@ -43,6 +43,16 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
   - `POST /users/:userId/restore` responde 200 `{ user }`; 404 si no existe o no estaba archivado.
   - `DELETE /users/:userId` (borrado físico) responde 204. Solo con usuarios archivados: si no, 409 `{ message: 'Archiva el usuario antes de eliminarlo' }`.
   - Un admin no puede cambiarse su propio rol, desactivarse, archivarse ni eliminarse: 403 `{ message: 'No puedes hacer esto con tu propio usuario' }`.
+  - Al eliminar un usuario para siempre se borran también sus votos de La Orla.
+- **Voto de La Orla (Grade)**: `{ _id, from, to, value, createdAt, updatedAt }`. `from` (quien vota) y `to` (a quien) llegan como
+  `{ _id, name, email, photo? }`, también si el usuario está inactivo. `value` es `'A+'` o `'F'`. Un solo voto por pareja (from, to).
+- **Votos de La Orla** (solo `admin`):
+  - `GET /grades?page=&limit=&value=&user=` responde `{ grades, total, page, pages }`, primero los más nuevos. `user` deja los votos en los que
+    ese usuario vota o es votado. 400 si un filtro no es válido.
+  - `GET /grades/:gradeId` responde `{ grade }`; 404 si no existe.
+  - `POST /grades` con `{ from, to, value }` responde 201 `{ grade }`; 409 si la pareja ya tiene voto; 422 si `from` y `to` son el mismo usuario
+    (`{ message: 'Un usuario no se puede votar a sí mismo' }`) o el cuerpo no vale; 404 si `from` o `to` no existen.
+  - `PUT /grades/:gradeId` con `{ value }` responde 200 `{ grade }`. `DELETE /grades/:gradeId` responde 204 (borrado físico).
 
 ## Tareas
 
@@ -64,7 +74,7 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
 
 #### La Orla (`grades`)
 
-- [ ] Modelo Grade (La Orla) con sus rutas de admin · María
+- [x] Modelo Grade (La Orla) con sus rutas de admin · María
 
 #### Dates (`dates`)
 
@@ -237,3 +247,30 @@ La bitácora del Seminario 7, de donde viene este código, se conserva en el tag
   sin token 401.
 - Prompt de IA usado: «Lo de activo es importante, porque todo lo que venga después tiene que saber si un usuario está activo o no: si
   no lo está, no puede usar la API.» (conversación del formulario de usuario, en el frontend).
+
+### 2026-11-03 · Modelo Grade (La Orla) con sus rutas de admin
+
+- Qué es un voto, según el blog: en La Orla cada estudiante ve perfiles (el "Expediente") y a cada uno le pone A+ (aprobado) o F
+  (suspenso). Si dos se ponen A+ mutuamente se abre un Date (rama `dates`). Atributos: `from` (quien vota), `to` (a quien), `value`
+  (`'A+'` o `'F'`, en `GRADE_VALUES`) y las fechas de `timestamps`. No hace falta nada más para el mínimo 1; lo del límite de 30 A+ al día y
+  los 10 segundos para deshacer es de la app, no del backoffice.
+- `from` y `to` son referencias a `User` (como los autores de un libro en el seminario). Índice único `{ from, to }`: un usuario solo vota una
+  vez a cada perfil y el 409 sale solo del `ErrorHandler`.
+- Cuidado encontrado con el prehook de usuarios: el `populate` de `from` y `to` también es una consulta a `User`, así que un usuario inactivo
+  salía como `null`. Se hace el `populate` con `options: { withInactive: true }` y solo con `name`, `email` y `photo`.
+- `createGrade` comprueba antes que no sea un voto a uno mismo y que los dos usuarios existan, y devuelve `{ error }` o `{ grade }` para que el
+  controller elija 422, 404 o 201.
+- Rutas de admin en `routes/Grade.ts` con su Swagger: listado paginado (filtros `value` y `user`, validados con `ValidateGradeList`), ver,
+  crear, cambiar la nota y eliminar (borrado físico: un voto no se archiva).
+- Al eliminar un usuario para siempre se borran también sus votos (en `UserService.deleteUser`), para que no queden votos de alguien que ya no
+  existe.
+- Seed: 25 votos entre usuarios activos, con 4 parejas de A+ mutuo (Laia y Pau, Nerea y Marc, Hugo y Júlia, Usuario y Oriol) para los Dates.
+  Igual que los libros del seminario, cada voto se escribe con los emails y el script los cambia por ids.
+- Validación ejecutada: `npm run build` y `npm run lint` sin errores; `npm run seed -- --reset` crea 14 usuarios y 25 votos. Con la API, 19
+  pruebas con curl, todas correctas: listado (25 en 5 páginas, con nombres poblados), `value=A+` (16), `user` (los 7 de Laia), 400 con una nota
+  o un id no válidos; GET de uno (200) y de uno inexistente (404); POST de una usuaria inactiva (201 y su nombre no sale `null`), pareja
+  repetida (409), voto a sí misma (422), `from` inexistente (404 con su mensaje) y nota no válida (422); PUT a F (200) y con `from` en el body
+  (422); DELETE (204) y otra vez (404); como `user` 403 y sin token 401. Además, eliminar para siempre a una usuaria archivada con un voto deja
+  0 votos suyos en MongoDB.
+- Prompt de IA usado: «Montamos lo mismo con el modelo Grade, el de La Orla. ¿Qué atributos necesita este modelo para lo que queremos montar
+  en Studate? Dame el plan de acción.»

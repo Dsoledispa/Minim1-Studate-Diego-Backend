@@ -1,13 +1,14 @@
 import mongoose from 'mongoose';
 import { config } from './config/config';
 import Logging from './library/Logging';
+import Grade from './models/Grade';
 import User from './models/User';
-import { usersSeed } from './seed-data';
+import { gradesSeed, usersSeed } from './seed-data';
 
 // Llena la base de datos con los datos de ejemplo de seed-data.ts.
 //
 //   npm run seed             inserta los datos solo si la base de datos está vacía
-//   npm run seed -- --reset  borra los usuarios y los vuelve a insertar
+//   npm run seed -- --reset  borra los usuarios y los votos y los vuelve a insertar
 //
 // Siempre trabaja sobre la base de datos del .env (MONGO_URL).
 
@@ -21,7 +22,8 @@ const seed = async () => {
         // Ojo: deleteMany({}) es un borrado fisico real y a proposito.
         // El reset del seed rehace los datos desde cero, tambien los que estaban archivados.
         const users = await User.deleteMany({});
-        Logging.warning(`Borrados ${users.deletedCount} usuarios`);
+        const grades = await Grade.deleteMany({});
+        Logging.warning(`Borrados ${users.deletedCount} usuarios y ${grades.deletedCount} votos`);
     }
 
     const usersInDb = await User.countDocuments();
@@ -34,6 +36,20 @@ const seed = async () => {
     // create() dispara los hooks del modelo: la contrasena del usuario se guarda cifrada
     const createdUsers = await User.create(usersSeed);
     Logging.info(`Usuarios creados: ${createdUsers.length}`);
+
+    // Cada voto trae los emails de los dos usuarios; aquí se cambian por los ids que les ha dado MongoDB
+    const idOf = (email: string) => {
+        const user = createdUsers.find((created) => created.email === email);
+
+        if (!user) {
+            throw new Error(`En seed-data.ts hay un voto de un usuario que no existe: ${email}`);
+        }
+
+        return user._id;
+    };
+
+    const createdGrades = await Grade.insertMany(gradesSeed.map((grade) => ({ from: idOf(grade.from), to: idOf(grade.to), value: grade.value })));
+    Logging.info(`Votos de La Orla creados: ${createdGrades.length}`);
 };
 
 seed()
