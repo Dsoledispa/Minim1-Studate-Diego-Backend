@@ -234,7 +234,7 @@ si su petición estaba bien formada.
 | `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` | Cualquiera (refresh necesita la cookie con un refresh token válido) |
 | `/ping`, `/api-docs` | Cualquiera |
 | `/users/me` | Cualquier usuario con sesión |
-| `/users`, `/users/:userId` (gestión de usuarios) | Solo `admin` |
+| `/users`, `/users/:userId`, `/users/:userId/archive`, `/users/:userId/restore` (gestión de usuarios) | Solo `admin` |
 
 Decisiones y límites, porque es un proyecto de clase:
 
@@ -294,6 +294,9 @@ Todas las rutas salvo `/auth/*` y `/ping` necesitan la cabecera `Authorization: 
 | GET | `/users/:userId` | Devuelve un usuario, también si está inactivo o archivado. Solo admin | |
 | POST | `/users` | Crea un usuario con su rol y si está activo. Solo admin | `{ "name": "...", "email": "...", "password": "...", "role": "user" }` |
 | PUT | `/users/:userId` | Edita un usuario, su rol y si está activo (no la contraseña). Solo admin | `{ "name": "...", "email": "...", "role": "user", "active": true }` |
+| POST | `/users/:userId/archive` | Archiva un usuario (borrado lógico). Solo admin | |
+| POST | `/users/:userId/restore` | Restaura un usuario archivado. Solo admin | |
+| DELETE | `/users/:userId` | Elimina para siempre un usuario archivado (borrado físico). Solo admin | |
 Un usuario tiene `name`, `email` y `role` (`user` o `admin`), los datos de su perfil (`birthDate`,
 `degree` o titulación, `lookingFor` o "Qué busco", `bio` y `photo`) y el estado de su cuenta: `active`
 (si un admin lo ha desactivado) y `deleted` con `deletedAt` (si está archivado). La contraseña nunca se
@@ -318,9 +321,25 @@ válido y 500 si falla algo en el servidor.
 
 ## Borrado lógico y borrado físico
 
-Los usuarios no se borran de golpe: primero se **archivan** (borrado lógico, `deleted: true`) y se
-pueden restaurar; solo un usuario archivado se puede **eliminar para siempre** (borrado físico). Se
-implementa en la rama `users` y se explica aquí cuando esté hecho.
+Hay dos formas de "borrar" un usuario, y en el backoffice se usan en este orden:
+
+1. **Archivar** (borrado lógico, *soft delete*): `POST /users/:userId/archive`. El usuario **no se elimina**
+   de MongoDB: se marca con `deleted: true` y la fecha en `deletedAt`. A partir de ahí:
+   - no sale en el listado (sí con `?archived=true`);
+   - no puede iniciar sesión ni renovar el token (lo hace el [prehook](#usuarios-activos-prehook));
+   - no se puede editar (404) hasta que se restaure;
+   - su email sigue ocupado, así que al restaurarlo nunca choca con otro usuario.
+2. **Restaurar**: `POST /users/:userId/restore` deshace el archivado (`deleted: false` y se quita `deletedAt`).
+3. **Eliminar para siempre** (borrado físico, *hard delete*): `DELETE /users/:userId`. El documento
+   desaparece de MongoDB y no se puede deshacer. Solo se puede con un usuario **archivado**; si no, la API
+   responde 409 "Archiva el usuario antes de eliminarlo".
+
+¿Por qué en dos pasos? El borrado lógico es lo normal en una aplicación real: un error se arregla
+restaurando y no se pierden datos. El borrado físico existe para cuando de verdad hay que quitar los datos
+de alguien (por ejemplo, si lo pide el propio usuario), y obligar a archivar antes evita borrar a alguien
+por error con un solo clic.
+
+Un admin no puede archivarse ni eliminarse a sí mismo (403).
 
 ## Documentación de la API
 

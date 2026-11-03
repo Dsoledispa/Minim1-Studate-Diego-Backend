@@ -128,6 +128,7 @@ const swaggerDocument = swaggerJsdoc({
                 BadCredentials: errorResponse('El email o la contraseña no son correctos', 'Email o contraseña incorrectos'),
                 Unauthorized: errorResponse('Falta el token, ha caducado o no es válido', 'El token ha caducado'),
                 Forbidden: errorResponse('El usuario no tiene el rol necesario', 'Necesitas el rol admin'),
+                NotArchived: errorResponse('Solo se puede eliminar para siempre un usuario archivado', 'Archiva el usuario antes de eliminarlo'),
                 OwnUser: errorResponse('Un admin no puede hacer esto con su propio usuario', 'No puedes hacer esto con tu propio usuario'),
                 UserOne: okResponse('Un usuario', { type: 'object', properties: { user: userSchema } }, { user: userExample }),
                 UserList: okResponse(

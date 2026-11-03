@@ -104,4 +104,73 @@ const updateUser = async (req: Request<{ userId: string }>, res: Response, next:
     }
 };
 
-export default { readMe, listUsers, readUser, createUser, updateUser };
+// Función para archivar un usuario (borrado logico)
+const archiveUser = async (req: Request<{ userId: string }>, res: Response, next: NextFunction) => {
+    const userId = req.params.userId;
+
+    // Un admin no puede archivarse a si mismo
+    if (userId === req.user!.id) {
+        res.status(403).json({ message: OWN_USER_MESSAGE });
+        return;
+    }
+
+    try {
+        const user = await UserService.archiveUser(userId);
+
+        if (user) {
+            res.status(200).json({ user });
+        } else {
+            // No existe o ya estaba archivado
+            res.status(404).json({ message: 'not found' });
+        }
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Función para restaurar un usuario archivado
+const restoreUser = async (req: Request<{ userId: string }>, res: Response, next: NextFunction) => {
+    const userId = req.params.userId;
+
+    try {
+        const user = await UserService.restoreUser(userId);
+
+        if (user) {
+            res.status(200).json({ user });
+        } else {
+            // No existe o no estaba archivado
+            res.status(404).json({ message: 'not found' });
+        }
+    } catch (error) {
+        next(error);
+    }
+};
+
+// Función para eliminar un usuario para siempre (borrado fisico)
+const deleteUser = async (req: Request<{ userId: string }>, res: Response, next: NextFunction) => {
+    const userId = req.params.userId;
+
+    // Un admin no puede eliminarse a si mismo
+    if (userId === req.user!.id) {
+        res.status(403).json({ message: OWN_USER_MESSAGE });
+        return;
+    }
+
+    try {
+        const result = await UserService.deleteUser(userId);
+
+        if (result === 'deleted') {
+            // 204: se ha eliminado y no hay nada que devolver
+            res.status(204).send();
+        } else if (result === 'not-archived') {
+            // 409: el usuario existe, pero su estado no permite eliminarlo todavia
+            res.status(409).json({ message: 'Archiva el usuario antes de eliminarlo' });
+        } else {
+            res.status(404).json({ message: 'not found' });
+        }
+    } catch (error) {
+        next(error);
+    }
+};
+
+export default { readMe, listUsers, readUser, createUser, updateUser, archiveUser, restoreUser, deleteUser };

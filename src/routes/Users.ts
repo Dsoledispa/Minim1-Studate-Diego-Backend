@@ -156,4 +156,78 @@ router.post('/', VerifyToken, RequireRole('admin'), ValidateJoi(Schemas.user.cre
 // Ruta para editar un usuario
 router.put('/:userId', VerifyToken, RequireRole('admin'), ValidateId('userId'), ValidateJoi(Schemas.user.update), controller.updateUser);
 
+/**
+ * @openapi
+ * /users/{userId}/archive:
+ *   post:
+ *     tags: [Users]
+ *     summary: Archiva un usuario (borrado lógico, backoffice)
+ *     description: >
+ *       El usuario no se elimina: se marca como archivado (deleted y deletedAt) y ya no puede iniciar sesión.
+ *       Se puede restaurar. Un admin no puede archivarse a sí mismo (403).
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: string, pattern: '^[0-9a-fA-F]{24}$' }
+ *     responses:
+ *       200: { $ref: '#/components/responses/UserOne' }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/OwnUser' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+
+// Ruta para archivar un usuario
+router.post('/:userId/archive', VerifyToken, RequireRole('admin'), ValidateId('userId'), controller.archiveUser);
+
+/**
+ * @openapi
+ * /users/{userId}/restore:
+ *   post:
+ *     tags: [Users]
+ *     summary: Restaura un usuario archivado (backoffice)
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: string, pattern: '^[0-9a-fA-F]{24}$' }
+ *     responses:
+ *       200: { $ref: '#/components/responses/UserOne' }
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/Forbidden' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ */
+
+// Ruta para restaurar un usuario archivado
+router.post('/:userId/restore', VerifyToken, RequireRole('admin'), ValidateId('userId'), controller.restoreUser);
+
+/**
+ * @openapi
+ * /users/{userId}:
+ *   delete:
+ *     tags: [Users]
+ *     summary: Elimina un usuario para siempre (borrado físico, backoffice)
+ *     description: >
+ *       Solo se puede eliminar un usuario archivado (si no, 409). No se puede deshacer.
+ *       Un admin no puede eliminarse a sí mismo (403).
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema: { type: string, pattern: '^[0-9a-fA-F]{24}$' }
+ *     responses:
+ *       204:
+ *         description: Usuario eliminado
+ *       400: { $ref: '#/components/responses/BadRequest' }
+ *       401: { $ref: '#/components/responses/Unauthorized' }
+ *       403: { $ref: '#/components/responses/OwnUser' }
+ *       404: { $ref: '#/components/responses/NotFound' }
+ *       409: { $ref: '#/components/responses/NotArchived' }
+ */
+
+// Ruta para eliminar un usuario para siempre
+router.delete('/:userId', VerifyToken, RequireRole('admin'), ValidateId('userId'), controller.deleteUser);
+
 export = router;

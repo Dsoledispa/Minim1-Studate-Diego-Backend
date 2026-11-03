@@ -86,4 +86,41 @@ export const updateUser = (userId: string, data: Partial<IUser>) => {
     return User.findOneAndUpdate({ _id: userId, deleted: false }, data, { new: true }).setOptions(ALL_USERS);
 };
 
-export default { getUserById, getUsers, getUserForAdmin, createUser, updateUser };
+// ---- Borrado logico (archivar y restaurar) y borrado fisico (eliminar para siempre) ----
+
+// Funcion que archiva un usuario: borrado logico. No se elimina de la base de datos, solo se marca
+// como borrado (deleted: true) y se guarda la fecha. Gracias al prehook, un usuario archivado ya no
+// puede iniciar sesion. Solo encuentra usuarios no archivados: archivar dos veces devuelve null (404).
+export const archiveUser = (userId: string) => {
+    return User.findOneAndUpdate({ _id: userId, deleted: false }, { deleted: true, deletedAt: new Date() }, { new: true }).setOptions(ALL_USERS);
+};
+
+// Funcion que restaura un usuario archivado: deshace el borrado logico.
+// $unset quita el campo deletedAt del documento. Solo encuentra usuarios archivados.
+export const restoreUser = (userId: string) => {
+    return User.findOneAndUpdate({ _id: userId, deleted: true }, { deleted: false, $unset: { deletedAt: 1 } }, { new: true }).setOptions(ALL_USERS);
+};
+
+// Lo que puede pasar al eliminar un usuario para siempre. El controlador elige el codigo segun el resultado
+export type DeleteUserResult = 'deleted' | 'not-found' | 'not-archived';
+
+// Funcion que elimina un usuario para siempre: borrado fisico, el documento desaparece de MongoDB.
+// Para no borrar a nadie por error, solo se puede eliminar un usuario que antes se haya archivado.
+export const deleteUser = async (userId: string): Promise<DeleteUserResult> => {
+    const user = await User.findById(userId).setOptions(ALL_USERS);
+
+    if (!user) {
+        return 'not-found';
+    }
+
+    if (!user.deleted) {
+        return 'not-archived';
+    }
+
+    // Cuando existan los votos de La Orla y los Dates, aqui se borraran tambien los del usuario
+    await User.deleteOne({ _id: userId });
+
+    return 'deleted';
+};
+
+export default { getUserById, getUsers, getUserForAdmin, createUser, updateUser, archiveUser, restoreUser, deleteUser };

@@ -38,7 +38,10 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
     email existe, 422 si el cuerpo no vale.
   - `PUT /users/:userId` con lo mismo salvo `password` (`name` y `email` obligatorios) responde 200 `{ user }`; 404 si no existe o está archivado.
     `photo: ''` quita la foto.
-  - Un admin no puede cambiarse su propio rol ni desactivarse: 403 `{ message: 'No puedes hacer esto con tu propio usuario' }`.
+  - `POST /users/:userId/archive` (borrado lógico) responde 200 `{ user }` con `deleted: true`; 404 si no existe o ya estaba archivado.
+  - `POST /users/:userId/restore` responde 200 `{ user }`; 404 si no existe o no estaba archivado.
+  - `DELETE /users/:userId` (borrado físico) responde 204. Solo con usuarios archivados: si no, 409 `{ message: 'Archiva el usuario antes de eliminarlo' }`.
+  - Un admin no puede cambiarse su propio rol, desactivarse, archivarse ni eliminarse: 403 `{ message: 'No puedes hacer esto con tu propio usuario' }`.
 
 ## Tareas
 
@@ -56,7 +59,7 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
 - [x] Modelo User ampliado (perfil, activo, archivado) y datos de ejemplo · Diego
 - [x] Prehook de Mongoose "está activo" · Diego
 - [x] Gestión de usuarios: listado paginado, búsqueda, editar y cambiar rol · Diego
-- [ ] Archivar, restaurar y eliminar para siempre (usuarios) · Diego
+- [x] Archivar, restaurar y eliminar para siempre (usuarios) · Diego
 
 #### La Orla (`grades`)
 
@@ -181,3 +184,26 @@ La bitácora del Seminario 7, de donde viene este código, se conserva en el tag
   o desactivándose (403) y editando su nombre (200); como `user`, 403 en listado, detalle y creación; sin token, 401.
 - Prompt de IA usado: «Siguiente: gestión de usuarios, listado paginado, búsqueda, editar y cambiar rol. Hay que montar esta
   funcionalidad. ¿Cómo lo harías? ¿Cuál sería el plan de acción?»
+
+### 2026-11-03 · Archivar, restaurar y eliminar para siempre
+
+- Soft delete y hard delete, como se explicó en clase: el borrado normal es lógico (archivar) y se puede deshacer; el
+  borrado físico existe, pero solo para usuarios ya archivados.
+- `POST /users/:userId/archive` pone `deleted: true` y `deletedAt`, igual que hacía `deleteBook` en el seminario.
+  `POST /users/:userId/restore` lo deshace (con `$unset` se quita `deletedAt`). Los dos usan `findOneAndUpdate` con
+  `deleted` en el filtro, así que archivar dos veces o restaurar uno que no está archivado da 404.
+- `DELETE /users/:userId` borra el documento con `deleteOne`. El service devuelve qué ha pasado (`'deleted'`,
+  `'not-found'` o `'not-archived'`) y el controller elige el código: 204, 404 o 409. Se ha elegido así para que el
+  service no sepa nada de HTTP, como el resto de services.
+- Un admin no puede archivarse ni eliminarse a sí mismo (403, el mismo mensaje que en la edición).
+- Queda apuntado en `deleteUser` que, cuando existan los votos de La Orla y los Dates, también habrá que borrar los del usuario.
+- README: sección "Borrado lógico y borrado físico" con el porqué de los dos pasos. Swagger: las tres rutas y la respuesta `NotArchived`.
+- Validación ejecutada: `npm run build` y `npm run lint` sin errores. Con el seed recién hecho, 18 pruebas con curl, todas correctas:
+  archivar a Laia (200, con `deleted` y `deletedAt`), ya no sale en el listado y sí en `archived=true`, su login da 401, archivarla
+  otra vez 404, restaurarla (200, sin `deletedAt`) y su login vuelve a dar 200, restaurar una no archivada 404, `DELETE` sin
+  archivar 409, archivar y `DELETE` 204, después su GET y otro `DELETE` 404, el admin archivándose o eliminándose 403, un `user`
+  haciéndolo 403 e id mal formado 400. En MongoDB quedan 13 usuarios y ninguno con el email de Laia.
+- Pruebas del bloque `users`: además de las de cada tarea (6 logins del prehook, 30 de la gestión y estas 18), se repite todo
+  sobre una base de datos recién sembrada y sale igual.
+- Prompt de IA usado: «Ahora archivar, restaurar y eliminar para siempre usuarios. ¿Cómo lo harías? Y recuérdame cómo era esto del
+  soft delete y el hard delete [...] Dame el plan de acción.»
