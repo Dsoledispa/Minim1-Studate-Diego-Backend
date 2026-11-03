@@ -82,9 +82,9 @@ router.get('/:dateId', VerifyToken, ValidateId('dateId'), controller.readDate);
  *     responses:
  *       201: { $ref: '#/components/responses/DateOne' }
  *       401: { $ref: '#/components/responses/Unauthorized' }
- *       403: { $ref: '#/components/responses/Forbidden' }
+ *       403: { $ref: '#/components/responses/NotYourDate' }
  *       404: { $ref: '#/components/responses/NotFound' }
- *       409: { $ref: '#/components/responses/Conflict' }
+ *       409: { $ref: '#/components/responses/DateConflict' }
  *       422: { $ref: '#/components/responses/Unprocessable' }
  */
 

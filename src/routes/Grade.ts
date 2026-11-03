@@ -84,7 +84,7 @@ router.get('/:gradeId', VerifyToken, RequireRole('admin'), ValidateId('gradeId')
  *       401: { $ref: '#/components/responses/Unauthorized' }
  *       403: { $ref: '#/components/responses/Forbidden' }
  *       404: { $ref: '#/components/responses/NotFound' }
- *       409: { $ref: '#/components/responses/Conflict' }
+ *       409: { $ref: '#/components/responses/GradeConflict' }
  *       422: { $ref: '#/components/responses/Unprocessable' }
  */
 

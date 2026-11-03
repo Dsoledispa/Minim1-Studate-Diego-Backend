@@ -44,7 +44,6 @@ export const getGradeById = (gradeId: string) => {
 // Funcion que crea un voto. Antes comprueba que no es un voto a uno mismo y que los dos usuarios existen
 // (aunque esten inactivos: el admin puede cargar votos de cualquiera).
 // Devuelve { error } si algo falla, para que el controlador elija el codigo, o { grade } si se ha creado.
-// Si la pareja ya tenia voto, MongoDB lanza un error 11000 y el ErrorHandler responde 409.
 export const createGrade = async (data: IGrade) => {
     if (String(data.from) === String(data.to)) {
         return { error: 'same-user' };
@@ -61,6 +60,14 @@ export const createGrade = async (data: IGrade) => {
 
     if (!to) {
         return { error: 'to-not-found' };
+    }
+
+    // Lo comprobamos antes de guardar para dar un mensaje claro. Si no, el indice unico de (from, to)
+    // haria saltar el error 11000 y el ErrorHandler responderia "from ya existe", que no se entiende
+    const existing = await Grade.findOne({ from: data.from, to: data.to });
+
+    if (existing) {
+        return { error: 'already-voted' };
     }
 
     const created = await Grade.create(data);
