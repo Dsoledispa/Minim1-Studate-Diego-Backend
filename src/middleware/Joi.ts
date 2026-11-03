@@ -2,14 +2,39 @@ import Joi, { ObjectSchema } from 'joi';
 
 import { NextFunction, Request, Response } from 'express';
 
-import { IAuthor } from '../models/Author';
-import { BOOK_LANGUAGES, BOOK_TAGS, IBook } from '../models/Book';
-import { IUser } from '../models/User';
+import { DATE_STATUSES, DateStatus } from '../models/Date';
+import { GRADE_VALUES, GradeValue, IGrade } from '../models/Grade';
+import { IUser, PHOTO_MAX_LENGTH, USER_ROLES, UserRole } from '../models/User';
 
 export interface PaginationQuery {
     page: number;
     limit: number;
     search: string;
+}
+
+// Los filtros del listado de usuarios del backoffice: la paginacion y la busqueda de siempre,
+// y ademas el rol, si esta activo y si esta archivado
+export interface UserListQuery extends PaginationQuery {
+    role?: UserRole;
+    active?: boolean;
+    degree?: string;
+    archived: boolean;
+}
+
+// Los filtros del listado de Dates: la paginacion, el estado y un usuario
+export interface DateListQuery {
+    page: number;
+    limit: number;
+    status?: DateStatus;
+    user?: string;
+}
+
+// Los filtros del listado de votos de La Orla: la paginacion, la nota y un usuario
+export interface GradeListQuery {
+    page: number;
+    limit: number;
+    value?: GradeValue;
+    user?: string;
 }
 
 // Funcion que se encarga de validar los datos que llegan en una petición
@@ -51,6 +76,27 @@ export const ValidateId = (paramName: string) => {
     };
 };
 
+// La foto de perfil llega como texto en base64 y solo puede ser PNG o JPG
+const PHOTO = /^data:image\/(png|jpeg);base64,/;
+
+// Campos del perfil de un usuario. Son los mismos al crear y al editar, asi que los escribimos una vez
+const userProfile = {
+    // La fecha de nacimiento es opcional y debe ser una fecha
+    birthDate: Joi.date().example('2003-02-20'),
+
+    // La titulacion es un texto libre
+    degree: Joi.string().trim().max(100).example('Grau en Enginyeria Telemàtica'),
+
+    // El "Qué busco" del perfil, como mucho 100 caracteres
+    lookingFor: Joi.string().trim().max(100).example('Tomar algo después de clase'),
+
+    // La bio puede ir vacia y no puede superar los 500 caracteres
+    bio: Joi.string().trim().max(500).allow('').example('Siempre en la biblioteca de la EETAC, casi siempre con café.'),
+
+    // La foto: una imagen PNG o JPG en base64. Con '' se quita la foto que tuviera
+    photo: Joi.string().max(PHOTO_MAX_LENGTH).pattern(PHOTO).allow('')
+};
+
 // Aqui tenemos todos los esquemas de validacion que utilizamos en la aplicacion
 export const Schemas = {
     // Validacion de los parametros de paginacion
@@ -58,6 +104,49 @@ export const Schemas = {
         page: Joi.number().integer().min(1).default(1),
         limit: Joi.number().integer().min(1).max(100).default(5),
         search: Joi.string().trim().max(100).allow('').default('')
+    }),
+
+    // Validacion de los filtros del listado de usuarios: los de la paginacion y tres mas
+    userList: Joi.object<UserListQuery>({
+        page: Joi.number().integer().min(1).default(1),
+        limit: Joi.number().integer().min(1).max(100).default(5),
+        search: Joi.string().trim().max(100).allow('').default(''),
+
+        // Solo los usuarios de un rol
+        role: Joi.string().valid(...USER_ROLES),
+
+        // Solo los activos (true) o solo los inactivos (false)
+        active: Joi.boolean(),
+
+        // Solo los de una titulacion (tiene que coincidir entera)
+        degree: Joi.string().trim().max(100),
+
+        // Por defecto se listan los usuarios no archivados; con archived=true, solo los archivados
+        archived: Joi.boolean().default(false)
+    }),
+
+    // Validacion de los filtros del listado de Dates
+    dateList: Joi.object<DateListQuery>({
+        page: Joi.number().integer().min(1).default(1),
+        limit: Joi.number().integer().min(1).max(100).default(5),
+
+        // Solo los de una bandeja: pending, ongoing o closed
+        status: Joi.string().valid(...DATE_STATUSES),
+
+        // Solo los de este usuario (este filtro solo lo usa el admin)
+        user: Joi.string().regex(OBJECT_ID)
+    }),
+
+    // Validacion de los filtros del listado de votos
+    gradeList: Joi.object<GradeListQuery>({
+        page: Joi.number().integer().min(1).default(1),
+        limit: Joi.number().integer().min(1).max(100).default(5),
+
+        // Solo los A+ o solo los F
+        value: Joi.string().valid(...GRADE_VALUES),
+
+        // Solo los votos en los que participa este usuario (dando o recibiendo la nota)
+        user: Joi.string().regex(OBJECT_ID)
     }),
 
     // Validaciones de las rutas de autenticacion
@@ -68,139 +157,131 @@ export const Schemas = {
         register: Joi.object<IUser>({
             name: Joi.string().trim().required().example('Ana'),
             email: Joi.string().email().required().example('ana@example.com'),
-            password: Joi.string().min(8).required().example('seminari7')
+            password: Joi.string().min(8).required().example('studate26')
         }),
 
         // Login: el email y la contraseña. Aqui no se comprueba la longitud de la contraseña:
         // si es incorrecta, el servidor responde 401 igualmente
         login: Joi.object<IUser>({
             email: Joi.string().email().required().example('admin@example.com'),
-            password: Joi.string().required().example('seminari7')
+            password: Joi.string().required().example('studate26')
         })
 
         // Refresh y logout no tienen esquema: no llevan body, el refresh token va en una cookie
     },
 
-    // Validaciones relacionadas con los autores
-    author: {
-        // Esquema que se utiliza cuando queremos crear un autor
-        create: Joi.object<IAuthor>({
-            // El nombre es obligatorio y debe ser un texto
-            name: Joi.string().required().example('Ursula K. Le Guin'),
+    // Validaciones de la gestion de usuarios del backoffice
+    user: {
+        // Esquema que se utiliza cuando el admin crea un usuario
+        create: Joi.object<IUser>({
+            // El nombre, el email y la contraseña son obligatorios, como en el registro
+            name: Joi.string().trim().required().example('Laia Puig'),
+            email: Joi.string().email().required().example('laia@example.com'),
+            password: Joi.string().min(8).required().example('studate26'),
 
-            // El email es obligatorio y tiene que tener un formato de email valido
-            email: Joi.string().email().required().example('leguin@example.com'),
+            // A diferencia del registro, el admin si puede elegir el rol y si el usuario esta activo
+            role: Joi.string().valid(...USER_ROLES),
+            active: Joi.boolean(),
 
-            // La fecha de nacimiento es opcional y debe ser una fecha
-            birthDate: Joi.date(),
-
-            // La nacionalidad es un texto y es opcional
-            nationality: Joi.string(),
-
-            // La biografia es opcional y no puede superar los 1000 caracteres
-            biography: Joi.string().max(1000),
-
-            // La pagina web debe tener un formato de URL valido
-            website: Joi.string().uri(),
-
-            // La foto tambien debe ser una URL valida
-            photoUrl: Joi.string().uri(),
-
-            // Indica si el autor esta activo o no
-            active: Joi.boolean()
+            ...userProfile
         }),
 
-        // Esquema que se utiliza para actualizar un autor
-        update: Joi.object<IAuthor>({
-            // Estos campos son obligatorios tambien al actualizar
-            name: Joi.string().required(),
+        // Esquema que se utiliza para editar un usuario.
+        // La contraseña no se cambia desde aqui: no esta en el esquema, asi que enviarla da 422
+        update: Joi.object<IUser>({
+            name: Joi.string().trim().required(),
             email: Joi.string().email().required(),
+            role: Joi.string().valid(...USER_ROLES),
+            active: Joi.boolean(),
 
-            // El resto de campos son opcionales
-            birthDate: Joi.date(),
-            nationality: Joi.string(),
-            biography: Joi.string().max(1000),
-            website: Joi.string().uri(),
-            photoUrl: Joi.string().uri(),
-            active: Joi.boolean()
+            ...userProfile
         })
     },
 
-    // Validaciones relacionadas con los libros
-    book: {
-        // Esquema que se utiliza cuando queremos crear un libro
-        create: Joi.object<IBook>({
-            // El titulo es obligatorio
-            title: Joi.string().required().example('A Wizard of Earthsea'),
+    // Validaciones de los votos de La Orla
+    grade: {
+        // Esquema que se utiliza cuando el admin crea un voto
+        create: Joi.object<IGrade>({
+            // Quien vota y a quien: dos ids de usuario con formato de MongoDB
+            from: Joi.string().regex(OBJECT_ID).required().example('6ab3f2fe9c500204a7d5f8a3'),
+            to: Joi.string().regex(OBJECT_ID).required().example('6ab3f2fe9c500204a7d5f8a4'),
 
-            // El libro tiene que tener como minimo un autor
-            // Ademas cada autor debe tener un id con formato valido de MongoDB
-            authors: Joi.array().items(Joi.string().regex(OBJECT_ID)).min(1).required().example(['6ab2d1ad9ada2730451295a7']),
-
-            // El ISBN es obligatorio
-            isbn: Joi.string().required().example('9788400000008'),
-
-            // La edicion tiene que ser como minimo la numero 1
-            edition: Joi.number().min(1),
-
-            // El resto de estos datos son opcionales
-            publisher: Joi.string(),
-
-            // El año de publicacion debe estar entre 1450 y 2100
-            publishedYear: Joi.number().min(1450).max(2100),
-
-            // El numero de paginas tiene que ser como minimo 1
-            pages: Joi.number().min(1),
-
-            // El idioma tiene que ser uno de los idiomas permitidos
-            language: Joi.string().valid(...BOOK_LANGUAGES),
-
-            // Los tags tienen que pertenecer a la lista de tags permitidos
-            tags: Joi.array().items(Joi.string().valid(...BOOK_TAGS)),
-
-            // El precio no puede ser negativo
-            price: Joi.number().min(0),
-
-            //El campo de descripcion es opcional y puede ser un string vacio
-            description: Joi.string().allow('').optional().example('Sinopsis o descripción del libro')
+            // La nota tiene que ser A+ o F
+            value: Joi.string()
+                .valid(...GRADE_VALUES)
+                .required()
+                .example('A+')
         }),
 
-        // Esquema que se utiliza para actualizar un libro
-        update: Joi.object<IBook>({
-            // Estos campos son obligatorios al actualizar el libro
-            title: Joi.string().required(),
-            authors: Joi.array().items(Joi.string().regex(OBJECT_ID)).min(1).required(),
-            isbn: Joi.string().required(),
+        // Esquema que se utiliza para cambiar la nota: los usuarios de un voto no se cambian
+        update: Joi.object<IGrade>({
+            value: Joi.string()
+                .valid(...GRADE_VALUES)
+                .required()
+        })
+    },
 
-            // La edicion no puede ser menor que 1
-            edition: Joi.number().min(1),
+    // Validaciones de los Dates
+    date: {
+        // Abrir un Date: los ids de los dos usuarios, distintos entre si
+        create: Joi.object({
+            users: Joi.array()
+                .items(Joi.string().regex(OBJECT_ID))
+                .length(2)
+                .unique()
+                .required()
+                .example(['6ab3f2fe9c500204a7d5f8a3', '6ab3f2fe9c500204a7d5f8a4'])
+        }),
 
-            // Datos opcionales del libro
-            publisher: Joi.string(),
-
-            // Comprobamos que el año esta dentro del rango permitido
-            publishedYear: Joi.number().min(1450).max(2100),
-
-            // El numero de paginas debe ser mayor que 0
-            pages: Joi.number().min(1),
-
-            // El idioma tiene que estar dentro de los permitidos
-            language: Joi.string().valid(...BOOK_LANGUAGES),
-
-            // Los tags tienen que ser valores permitidos
-            tags: Joi.array().items(Joi.string().valid(...BOOK_TAGS)),
-
-            // El precio no puede ser negativo
-            price: Joi.number().min(0),
-
-            //El campo de descripcion es opcional y puede ser un string vacio
-            description: Joi.string().allow('').optional().example('Sinopsis o descripción del libro')
+        // Cambiar de bandeja: solo el estado
+        update: Joi.object({
+            status: Joi.string()
+                .valid(...DATE_STATUSES)
+                .required()
+                .example('ongoing')
         })
     }
 };
 
 export const ValidatePagination = (req: Request, res: Response, next: NextFunction) => {
     const { error, value } = Schemas.pagination.validate(req.query);
+
+    if (error) {
+        return res.status(400).json({ message: error.details[0].message });
+    }
+
+    res.locals.query = value;
+    next();
+};
+
+// Igual que ValidatePagination, pero con los filtros del listado de Dates
+export const ValidateDateList = (req: Request, res: Response, next: NextFunction) => {
+    const { error, value } = Schemas.dateList.validate(req.query);
+
+    if (error) {
+        return res.status(400).json({ message: error.details[0].message });
+    }
+
+    res.locals.query = value;
+    next();
+};
+
+// Igual que ValidatePagination, pero con los filtros del listado de votos
+export const ValidateGradeList = (req: Request, res: Response, next: NextFunction) => {
+    const { error, value } = Schemas.gradeList.validate(req.query);
+
+    if (error) {
+        return res.status(400).json({ message: error.details[0].message });
+    }
+
+    res.locals.query = value;
+    next();
+};
+
+// Igual que ValidatePagination, pero con los filtros del listado de usuarios.
+// Joi convierte los textos de la URL a su tipo: "2" pasa a 2 y "false" pasa a false
+export const ValidateUserList = (req: Request, res: Response, next: NextFunction) => {
+    const { error, value } = Schemas.userList.validate(req.query);
 
     if (error) {
         return res.status(400).json({ message: error.details[0].message });

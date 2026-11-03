@@ -9,66 +9,42 @@ import { config } from './config';
 
 // Los esquemas del body salen de los mismos esquemas de Joi que validan las
 // peticiones, así que no se pueden quedar desfasados.
-const { swagger: authorInput } = j2s(Schemas.author.create);
-const { swagger: bookInput } = j2s(Schemas.book.create);
 const { swagger: registerInput } = j2s(Schemas.auth.register);
 const { swagger: loginInput } = j2s(Schemas.auth.login);
+const { swagger: userInput } = j2s(Schemas.user.create);
+const { swagger: userUpdateInput } = j2s(Schemas.user.update);
+const { swagger: gradeInput } = j2s(Schemas.grade.create);
+const { swagger: gradeUpdateInput } = j2s(Schemas.grade.update);
+const { swagger: dateInput } = j2s(Schemas.date.create);
+const { swagger: dateUpdateInput } = j2s(Schemas.date.update);
 
 // Lo que devuelve la API no es igual a lo que se envía: lleva el _id y las fechas que
-// pone MongoDB, el usuario nunca devuelve la contraseña, y el libro trae sus autores enteros.
+// pone MongoDB, y el usuario nunca devuelve la contraseña.
 const storedFields = {
     _id: { type: 'string', example: '6ab3f2fe9c500204a7d5f80b' },
     createdAt: { type: 'string', format: 'date-time' },
     updatedAt: { type: 'string', format: 'date-time' }
 };
 
-const authorSchema = { type: 'object', properties: { ...storedFields, ...authorInput.properties } };
-
 const { password: _password, ...userFields } = registerInput.properties;
 
+// El usuario tal como lo devuelve la API: los datos del registro (sin contraseña), el rol, el perfil
+// y el estado de la cuenta (activo y archivado)
 const userSchema = {
-    type: 'object',
-    properties: { ...storedFields, ...userFields, role: { type: 'string', enum: ['user', 'admin'] } }
-};
-
-const bookSchema = {
     type: 'object',
     properties: {
         ...storedFields,
-        ...bookInput.properties,
-        authors: { type: 'array', items: authorSchema }
+        ...userFields,
+        role: { type: 'string', enum: ['user', 'admin'] },
+        birthDate: { type: 'string', format: 'date-time' },
+        degree: { type: 'string' },
+        lookingFor: { type: 'string', maxLength: 100 },
+        bio: { type: 'string', maxLength: 500 },
+        photo: { type: 'string', description: 'Foto en base64 (data:image/jpeg;base64,...)' },
+        active: { type: 'boolean' },
+        deleted: { type: 'boolean', description: 'true si el usuario está archivado' },
+        deletedAt: { type: 'string', format: 'date-time' }
     }
-};
-
-// Ejemplos que se ven en la página de Swagger, sacados de los datos de npm run seed
-const authorExample = {
-    _id: '6ab3f2fe9c500204a7d5f801',
-    name: 'Ursula K. Le Guin',
-    email: 'leguin@example.com',
-    birthDate: '1929-10-21T00:00:00.000Z',
-    nationality: 'Estados Unidos',
-    biography: 'Escritora de ciencia ficción y fantasía conocida por Terramar.',
-    website: 'https://example.com/leguin',
-    photoUrl: 'https://example.com/fotos/leguin.jpg',
-    active: true,
-    createdAt: '2026-09-23T10:00:00.000Z',
-    updatedAt: '2026-09-23T10:00:00.000Z'
-};
-
-const bookExample = {
-    _id: '6ab3f2fe9c500204a7d5f80b',
-    title: 'A Wizard of Earthsea',
-    authors: [authorExample],
-    isbn: '9788400000008',
-    edition: 1,
-    publisher: 'Editorial Ejemplo',
-    publishedYear: 1968,
-    pages: 183,
-    language: 'en',
-    tags: ['fantasia'],
-    price: 16,
-    createdAt: '2026-09-23T10:00:00.000Z',
-    updatedAt: '2026-09-23T10:00:00.000Z'
 };
 
 // Una respuesta correcta: el esquema de lo que se devuelve y un ejemplo con datos de verdad
@@ -92,12 +68,67 @@ const errorResponse = (description: string, message: string) => ({
 });
 
 const userExample = {
-    _id: '6ab3f2fe9c500204a7d5f8a1',
-    name: 'Admin',
-    email: 'admin@example.com',
-    role: 'admin',
-    createdAt: '2026-10-05T10:00:00.000Z',
-    updatedAt: '2026-10-05T10:00:00.000Z'
+    _id: '6ab3f2fe9c500204a7d5f8a3',
+    name: 'Laia Puig',
+    email: 'laia@example.com',
+    role: 'user',
+    birthDate: '2003-02-20T00:00:00.000Z',
+    degree: 'Grau en Enginyeria Telemàtica',
+    lookingFor: 'Tomar algo después de clase',
+    bio: 'Siempre en la biblioteca de la EETAC, casi siempre con café.',
+    active: true,
+    deleted: false,
+    createdAt: '2026-11-03T10:00:00.000Z',
+    updatedAt: '2026-11-03T10:00:00.000Z'
+};
+
+// Un voto de La Orla: from y to llegan con los datos del usuario (populate), no solo con su id
+const userSummary = {
+    type: 'object',
+    properties: { _id: { type: 'string' }, name: { type: 'string' }, email: { type: 'string' }, photo: { type: 'string' } }
+};
+
+const gradeSchema = {
+    type: 'object',
+    properties: {
+        ...storedFields,
+        from: userSummary,
+        to: userSummary,
+        value: { type: 'string', enum: ['A+', 'F'] }
+    }
+};
+
+const gradeExample = {
+    _id: '6ab3f2fe9c500204a7d5f901',
+    from: { _id: '6ab3f2fe9c500204a7d5f8a3', name: 'Laia Puig', email: 'laia@example.com' },
+    to: { _id: '6ab3f2fe9c500204a7d5f8a4', name: 'Pau Ferrer', email: 'pau@example.com' },
+    value: 'A+',
+    createdAt: '2026-11-03T10:00:00.000Z',
+    updatedAt: '2026-11-03T10:00:00.000Z'
+};
+
+// Un Date: users llega con los datos de los dos usuarios; firstTurn es el id del que escribe primero
+const dateSchema = {
+    type: 'object',
+    properties: {
+        ...storedFields,
+        users: { type: 'array', items: userSummary },
+        status: { type: 'string', enum: ['pending', 'ongoing', 'closed'] },
+        firstTurn: { type: 'string', description: 'Id del usuario al que le toca escribir primero' },
+        expiresAt: { type: 'string', format: 'date-time' },
+        extended: { type: 'boolean', description: 'Si ya se ha usado la prórroga' }
+    }
+};
+
+const dateExample = {
+    _id: '6ab3f2fe9c500204a7d5fa01',
+    users: [gradeExample.from, gradeExample.to],
+    status: 'pending',
+    firstTurn: '6ab3f2fe9c500204a7d5f8a4',
+    expiresAt: '2026-11-04T10:00:00.000Z',
+    extended: false,
+    createdAt: '2026-11-03T10:00:00.000Z',
+    updatedAt: '2026-11-03T10:00:00.000Z'
 };
 
 const swaggerPath = (filePath: string) => filePath.replace(/\\/g, '/');
@@ -106,17 +137,17 @@ const swaggerDocument = swaggerJsdoc({
     definition: {
         openapi: '3.0.0',
         info: {
-            title: 'Library API',
+            title: 'Studate API',
             version: '1.0.0',
-            description: 'API de autores y libros del Seminari 7 (Node.js, Express, TypeScript y MongoDB).'
+            description: 'API de Studate, proyecto del Grupo 3 de EA (Node.js, Express, TypeScript y MongoDB).'
         },
         servers: [{ url: `http://localhost:${config.server.port}` }],
         tags: [
             { name: 'Health', description: 'Comprobar que la API responde' },
             { name: 'Auth', description: 'Registro, login, renovación del token y logout' },
-            { name: 'Users', description: 'Usuarios, para elegir con quién hablar en el chat' },
-            { name: 'Authors', description: 'Autores' },
-            { name: 'Books', description: 'Libros' }
+            { name: 'Users', description: 'Usuarios: el de la sesión, con quién abrir un Date y la gestión de usuarios del backoffice (solo admin)' },
+            { name: 'Grades', description: 'Votos de La Orla: A+ o F de un usuario a otro (solo admin)' },
+            { name: 'Dates', description: 'Citas entre dos usuarios que se han dado A+ (el admin ve todas; un usuario, las suyas)' }
         ],
         // Por defecto todas las rutas piden el token (el candado de Swagger).
         // Las rutas públicas lo quitan con security: [] en su comentario @openapi.
@@ -133,11 +164,15 @@ const swaggerDocument = swaggerJsdoc({
             schemas: {
                 RegisterInput: registerInput,
                 LoginInput: loginInput,
+                UserInput: userInput,
+                UserUpdateInput: userUpdateInput,
                 User: userSchema,
-                AuthorInput: authorInput,
-                BookInput: bookInput,
-                Author: authorSchema,
-                Book: bookSchema
+                GradeInput: gradeInput,
+                GradeUpdateInput: gradeUpdateInput,
+                Grade: gradeSchema,
+                DateInput: dateInput,
+                DateUpdateInput: dateUpdateInput,
+                Date: dateSchema
             },
             responses: {
                 LoginOk: okResponse(
@@ -152,40 +187,63 @@ const swaggerDocument = swaggerJsdoc({
                     { token: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...', user: userExample }
                 ),
                 BadCredentials: errorResponse('El email o la contraseña no son correctos', 'Email o contraseña incorrectos'),
-                Unauthorized: errorResponse('Falta el token, ha caducado o no es válido', 'El token ha caducado'),
+                Unauthorized: errorResponse(
+                    'Falta el token, ha caducado, no es válido o la cuenta ya no está activa ("Tu cuenta no está activa")',
+                    'El token ha caducado'
+                ),
                 Forbidden: errorResponse('El usuario no tiene el rol necesario', 'Necesitas el rol admin'),
-                AuthorOne: okResponse('Un autor', { type: 'object', properties: { author: authorSchema } }, { author: authorExample }),
-                AuthorList: okResponse(
-                    'Una página de autores y los datos de paginación',
+                GradeOne: okResponse('Un voto, con los datos de los dos usuarios', { type: 'object', properties: { grade: gradeSchema } }, { grade: gradeExample }),
+                GradeList: okResponse(
+                    'Una página de votos y los datos de paginación',
                     {
                         type: 'object',
                         properties: {
-                            authors: { type: 'array', items: authorSchema },
-                            total: { type: 'integer', example: 12 },
+                            grades: { type: 'array', items: gradeSchema },
+                            total: { type: 'integer', example: 25 },
                             page: { type: 'integer', example: 1 },
-                            pages: { type: 'integer', example: 3 }
+                            pages: { type: 'integer', example: 5 }
                         }
                     },
-                    { authors: [authorExample], total: 12, page: 1, pages: 3 }
+                    { grades: [gradeExample], total: 25, page: 1, pages: 5 }
                 ),
-                BookOne: okResponse('Un libro, con los datos de sus autores', { type: 'object', properties: { book: bookSchema } }, { book: bookExample }),
-                BookList: okResponse(
-                    'Una página de libros y los datos de paginación',
+                DateOne: okResponse('Un Date, con los datos de los dos usuarios', { type: 'object', properties: { date: dateSchema } }, { date: dateExample }),
+                DateList: okResponse(
+                    'Una página de Dates y los datos de paginación',
                     {
                         type: 'object',
                         properties: {
-                            books: { type: 'array', items: bookSchema },
-                            total: { type: 'integer', example: 12 },
+                            dates: { type: 'array', items: dateSchema },
+                            total: { type: 'integer', example: 4 },
                             page: { type: 'integer', example: 1 },
-                            pages: { type: 'integer', example: 3 }
+                            pages: { type: 'integer', example: 1 }
                         }
                     },
-                    { books: [bookExample], total: 12, page: 1, pages: 3 }
+                    { dates: [dateExample], total: 4, page: 1, pages: 1 }
                 ),
-                BadRequest: errorResponse('El id de la URL no tiene forma de id de MongoDB', 'authorId no es un id válido'),
+                AlreadyExtended: errorResponse('La prórroga solo se puede usar una vez', 'La prórroga de este Date ya se ha usado'),
+                GradeConflict: errorResponse('Ese usuario ya ha votado ese perfil (para cambiar la nota, PUT)', 'Este usuario ya ha votado ese perfil'),
+                DateConflict: errorResponse('Ya hay un Date entre esos dos usuarios', 'Ya hay un Date entre estos dos usuarios'),
+                NotYourDate: errorResponse('Un usuario normal solo puede abrir Dates en los que está él', 'Solo puedes abrir Dates en los que estés tú'),
+                NotArchived: errorResponse('Solo se puede eliminar para siempre un usuario archivado', 'Archiva el usuario antes de eliminarlo'),
+                OwnUser: errorResponse('Un admin no puede hacer esto con su propio usuario', 'No puedes hacer esto con tu propio usuario'),
+                UserOne: okResponse('Un usuario', { type: 'object', properties: { user: userSchema } }, { user: userExample }),
+                UserList: okResponse(
+                    'Una página de usuarios y los datos de paginación',
+                    {
+                        type: 'object',
+                        properties: {
+                            users: { type: 'array', items: userSchema },
+                            total: { type: 'integer', example: 12 },
+                            page: { type: 'integer', example: 1 },
+                            pages: { type: 'integer', example: 2 }
+                        }
+                    },
+                    { users: [userExample], total: 12, page: 1, pages: 2 }
+                ),
+                BadRequest: errorResponse('El id de la URL no tiene forma de id de MongoDB', 'userId no es un id válido'),
                 InvalidPagination: errorResponse('Los parámetros de paginación o búsqueda no son válidos', '"page" must be greater than or equal to 1'),
                 NotFound: errorResponse('No existe ningún recurso con ese id', 'not found'),
-                Conflict: errorResponse('Ya existe otro recurso con ese email o ese ISBN', 'email ya existe'),
+                Conflict: errorResponse('Ya existe otro recurso con ese email', 'email ya existe'),
                 Unprocessable: errorResponse('El body no cumple el esquema', '"email" is required'),
                 ServerError: errorResponse('Error inesperado del servidor', 'Internal server error')
             }

@@ -1,15 +1,16 @@
 import mongoose from 'mongoose';
 import { config } from './config/config';
 import Logging from './library/Logging';
-import Author from './models/Author';
-import Book from './models/Book';
+import DateModel from './models/Date';
+import Grade from './models/Grade';
 import User from './models/User';
-import { authorsSeed, booksSeed, usersSeed } from './seed-data';
+import { gradesSeed, usersSeed } from './seed-data';
+import { openDateIfMutual } from './services/DateService';
 
 // Llena la base de datos con los datos de ejemplo de seed-data.ts.
 //
 //   npm run seed             inserta los datos solo si la base de datos está vacía
-//   npm run seed -- --reset  borra los usuarios, los autores y los libros y vuelve a insertarlos
+//   npm run seed -- --reset  borra los usuarios, los votos y los Dates y los vuelve a insertar
 //
 // Siempre trabaja sobre la base de datos del .env (MONGO_URL).
 
@@ -21,19 +22,16 @@ const seed = async () => {
 
     if (reset) {
         // Ojo: deleteMany({}) es un borrado fisico real y a proposito.
-        // El reset del seed es el unico punto que hace borrado duro: asi tambien
-        // se limpian los documentos que se habian borrado logicamente (soft delete).
+        // El reset del seed rehace los datos desde cero, tambien los que estaban archivados.
         const users = await User.deleteMany({});
-        const authors = await Author.deleteMany({});
-        const books = await Book.deleteMany({});
-        Logging.warning(`Borrados ${users.deletedCount} usuarios, ${authors.deletedCount} autores y ${books.deletedCount} libros`);
+        const grades = await Grade.deleteMany({});
+        const dates = await DateModel.deleteMany({});
+        Logging.warning(`Borrados ${users.deletedCount} usuarios, ${grades.deletedCount} votos y ${dates.deletedCount} Dates`);
     }
 
     const usersInDb = await User.countDocuments();
-    const authorsInDb = await Author.countDocuments();
-    const booksInDb = await Book.countDocuments();
 
-    if (usersInDb > 0 || authorsInDb > 0 || booksInDb > 0) {
+    if (usersInDb > 0) {
         Logging.warning('La base de datos ya tiene datos. Para rehacerla: npm run seed -- --reset');
         return;
     }
@@ -42,26 +40,39 @@ const seed = async () => {
     const createdUsers = await User.create(usersSeed);
     Logging.info(`Usuarios creados: ${createdUsers.length}`);
 
-    const createdAuthors = await Author.create(authorsSeed);
-    Logging.info(`Autores creados: ${createdAuthors.length}`);
+    // Cada voto trae los emails de los dos usuarios; aquí se cambian por los ids que les ha dado MongoDB
+    const idOf = (email: string) => {
+        const user = createdUsers.find((created) => created.email === email);
 
-    // Cada libro trae los emails de sus autores; aquí se cambian por los ids que les ha dado MongoDB
-    const booksWithAuthors = booksSeed.map(({ authorEmails, ...book }) => {
-        const authors = authorEmails.map((email) => {
-            const author = createdAuthors.find((created) => created.email === email);
+        if (!user) {
+            throw new Error(`En seed-data.ts hay un voto de un usuario que no existe: ${email}`);
+        }
 
-            if (!author) {
-                throw new Error(`En seed-data.ts hay un libro de un autor que no existe: ${email}`);
-            }
+        return user._id;
+    };
 
-            return author._id;
-        });
+    const createdGrades = await Grade.insertMany(gradesSeed.map((grade) => ({ from: idOf(grade.from), to: idOf(grade.to), value: grade.value })));
+    Logging.info(`Votos de La Orla creados: ${createdGrades.length}`);
 
-        return { ...book, authors };
-    });
+    // Los Dates salen de los votos con la misma regla que usa la API: por cada A+, si ya existe el A+
+    // contrario y todavia no hay Date entre los dos, se abre uno
+    for (const grade of createdGrades.filter((created) => created.value === 'A+')) {
+        await openDateIfMutual(String(grade.from), String(grade.to));
+    }
 
-    const createdBooks = await Book.insertMany(booksWithAuthors);
-    Logging.info(`Libros creados: ${createdBooks.length}`);
+    // Para que haya Dates en todas las bandejas, uno pasa a "En curso" (con la prorroga usada)
+    // y otro a "Cerrado" (y ya caducado)
+    const dates = await DateModel.find().sort({ createdAt: 1 });
+
+    if (dates.length >= 2) {
+        await DateModel.updateOne(
+            { _id: dates[0]._id },
+            { status: 'ongoing', extended: true, expiresAt: new Date(Date.now() + 30 * 60 * 60 * 1000) }
+        );
+        await DateModel.updateOne({ _id: dates[1]._id }, { status: 'closed', expiresAt: new Date(Date.now() - 2 * 60 * 60 * 1000) });
+    }
+
+    Logging.info(`Dates abiertos: ${dates.length}`);
 };
 
 seed()

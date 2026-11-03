@@ -1,23 +1,28 @@
-# Seminari 7: backend con JWT y WebSockets
+# Studate: backend
 
-API REST con dos recursos, **autores** y **libros**, organizada en capas (rutas, middleware,
-controllers, services y models). Es el backend del Seminario 7 de EA:
+API REST de [Studate](https://studateapp.blogspot.com/), la app para conocer a gente de tu propia
+universidad. Es el proyecto del Grupo 3 de EA (María Cazorla, Diego Soledispa y Miguel Ángel
+Quiroga), organizado en capas (rutas, middleware, controllers, services y models).
 
-> Backend/Frontend: JWT, WebSockets. Backend TS + Express. Frontend Angular.
+El objetivo del Sprint 1 (el mínimo 1) es el **backoffice**: la zona de administración, en la que
+solo entra un `admin`. Pide:
 
-Este repositorio parte del backend del Seminario 6, que a su vez venía del Seminario 5. Del S6 trae
-dos cambios respecto al S5: la descripción de los libros y el borrado lógico (ver
-[Soft delete](#soft-delete)). Sobre esa base, el equipo añade en este seminario:
+- Gestión de usuarios y roles, con el rol del usuario en el payload del JWT
+- Tres modelos: `User`, `Grade` (los votos de La Orla) y `Date` (las citas)
+- Paginación en el servidor
+- Archivar (borrado lógico) y eliminar para siempre (borrado físico)
+- Usuarios activos e inactivos, con un prehook de Mongoose
 
-- Autenticación con JWT: registro, login, refresh (con el refresh token en una cookie HttpOnly), logout y rutas protegidas por rol
-- Paginación en el servidor de los listados de autores y libros
-- Extra: chat con WebSockets (socket.io) con los mensajes guardados en MongoDB
+El proyecto parte del ejercicio del Seminario 7 (JWT, refresh token en cookie HttpOnly, paginación y
+WebSockets), que se guarda tal cual en el tag `seminari7-base`. De ahí se trae la autenticación, la
+estructura en capas y la forma de hacer la paginación, el borrado lógico y Swagger.
 
 El frontend Angular que consume esta API está en
-[EA-Seminari7-JWT-WebSockets-Frontend](https://github.com/Dsoledispa/EA-Seminari7-JWT-WebSockets-Frontend).
+[STUDATE---FRONTEND](https://github.com/mariacazorla/STUDATE---FRONTEND).
 
-Las tareas y la bitácora del seminario están en [LOGS.md](LOGS.md); cómo trabajamos (ramas, commits,
-pull requests), en [CONTRIBUTING.md](CONTRIBUTING.md).
+Las tareas del sprint, el contrato con el frontend y la bitácora están en [LOGS.md](LOGS.md); cómo
+trabajamos (ramas, commits, pull requests), en [CONTRIBUTING.md](CONTRIBUTING.md). El tablero del
+sprint es el [GitHub Project de Studate](https://github.com/users/mariacazorla/projects/2).
 
 ## Stack tecnológico
 
@@ -38,7 +43,6 @@ Lo que ya está instalado y funcionando:
 | [swagger-jsdoc](https://github.com/Surnet/swagger-jsdoc) | 6.3 | Construye esa documentación leyendo los comentarios `@openapi` de las rutas |
 | [joi-to-swagger](https://github.com/Twipped/joi-to-swagger) | 6.2 | Convierte los esquemas de Joi en los esquemas de la documentación |
 | [jsonwebtoken](https://github.com/auth0/node-jsonwebtoken) | 9.0 | Firma y verifica los tokens JWT (`sign` y `verify`) |
-| [socket.io](https://socket.io/) | 4.8 | Servidor de WebSockets del chat, enganchado al mismo servidor HTTP que Express |
 | [tsx](https://tsx.is/) | 4.23 | Ejecuta TypeScript sin compilar y reinicia la API al guardar (`npm run dev`) |
 | [Oxlint](https://oxc.rs/docs/guide/usage/linter) | 1.85 | Analiza el código de `src/` y detecta errores comunes |
 | [Prettier](https://prettier.io/) | extensión de VS Code | Da formato al código al guardar (reglas en `.prettierrc`) |
@@ -57,8 +61,8 @@ TypeScript no hace falta instalarlo aparte: viene con las dependencias del proye
 ## Clonar el proyecto
 
 ```
-git clone https://github.com/Dsoledispa/EA-Seminari7-JWT-WebSockets-Backend
-cd EA-Seminari7-JWT-WebSockets-Backend
+git clone https://github.com/mariacazorla/STUDUDATE---BACKEND.git
+cd STUDUDATE---BACKEND
 ```
 
 ## Instalar las dependencias
@@ -77,7 +81,7 @@ cp .env.example .env
 
 | Variable | Qué es | Valor por defecto |
 |---|---|---|
-| `MONGO_URL` | Dirección de tu MongoDB | `mongodb://127.0.0.1:27017/seminari7` |
+| `MONGO_URL` | Dirección de tu MongoDB | `mongodb://127.0.0.1:27017/studate` |
 | `SERVER_PORT` | Puerto en el que escucha la API | `1337` |
 | `CORS_ORIGIN` | Origen exacto del frontend (con cookies no vale `*`) | `http://localhost:4200` |
 | `NODE_ENV` | Con `production`, la cookie del refresh token se marca `Secure` (solo HTTPS) | `development` |
@@ -89,22 +93,23 @@ cp .env.example .env
 Si falta `JWT_SECRET` o `JWT_REFRESH_SECRET`, la API no arranca y dice qué variable falta. Si ya tenías
 un `.env` de antes de la autenticación, copia esas cuatro líneas de `.env.example`.
 
-Cada seminario usa su propia base de datos (`seminari7`), así los datos del S5 o del S6 no se mezclan
-con los de este. Con una base de datos nueva no hace falta `npm run migrate-indexes`: los índices ya
-se crean bien desde el principio.
+Studate usa su propia base de datos (`studate`), así los datos de los seminarios no se mezclan con los
+del proyecto.
 
 ## Llenar la base de datos (la primera vez)
 
 Si arrancas con la base de datos vacía, la API funciona pero no devuelve nada y no hay ningún usuario
-con el que iniciar sesión. Para tener datos con los que probar, hay 2 usuarios, 12 autores y 12 libros
-de ejemplo en `src/seed-data.ts`:
+con el que iniciar sesión. Para tener datos con los que probar, hay 14 usuarios, 25 votos de La Orla
+y 4 Dates de ejemplo en `src/seed-data.ts` (los Dates salen de las cuatro parejas que se han dado A+): un admin, un usuario normal y doce estudiantes con su perfil. De los estudiantes,
+dos están inactivos y dos archivados, para poder probar el prehook de activos y el borrado lógico:
 
 ```
 npm run seed
 ```
 
 Este comando solo inserta los datos si la base de datos está vacía. Si ya tienes datos de pruebas
-anteriores, o vienen de una versión antigua de los modelos, hay que borrarlos y volver a crearlos:
+anteriores, o vienen de una versión antigua de los modelos (por ejemplo, los usuarios de antes de tener
+perfil), hay que borrarlos y volver a crearlos:
 
 ```
 npm run seed -- --reset
@@ -112,130 +117,52 @@ npm run seed -- --reset
 
 Siempre trabaja sobre la base de datos de tu `.env`.
 
-Los usuarios de ejemplo son:
+Todos tienen la contraseña `studate26`. Los que más se usan para probar:
 
-| Email | Contraseña | Rol |
+| Email | Rol | Para qué |
 |---|---|---|
-| `admin@example.com` | `seminari7` | `admin`: puede usar el backoffice (autores y libros) |
-| `user@example.com` | `seminari7` | `user`: puede iniciar sesión, pero no gestionar autores ni libros |
+| `admin@example.com` | `admin` | Entrar en el backoffice |
+| `user@example.com` | `user` | Un usuario normal: puede iniciar sesión, pero no entrar en el backoffice |
+| `aina@example.com`, `iker@example.com` | `user` | Inactivos |
+| `sara@example.com`, `dani@example.com` | `user` | Archivados |
 
 Las contraseñas están escritas a la vista en `src/seed-data.ts`. Es un proyecto de clase: son públicas
 a propósito, para que cualquiera que clone el repositorio pueda entrar con cualquier usuario. En la
 base de datos sí se guardan cifradas, porque el modelo `User` las cifra antes de guardarlas.
 
-Si tu base de datos es de antes del Seminario 7, sus autores todavía tienen guardados los campos
-`password` y `role`, que ya no existen en el modelo. Quitar un campo del esquema no lo borra de los
-documentos, y la contraseña cifrada saldría en `GET /authors`. Para quitarlos sin perder tus datos:
-
-```
-npm run migrate-authors
-```
-
-(`npm run seed -- --reset` también lo soluciona, porque rehace todos los datos.)
-
-## Ejecutar
-
-Mientras programas, arranca la API en modo desarrollo. Se reinicia sola cada vez que guardas un archivo:
-```
-npm run dev
-```
-
-Para comprobar que responde, abre http://localhost:1337/ping en el navegador. Debe devolver `{"hello":"world"}`.
-La documentación de la API (Swagger) está en http://localhost:1337/api-docs.
-
-Para ejecutar la versión compilada, como se haría en un servidor:
-```
-npm run build
-npm start
-```
-
-`npm run build` compila de TypeScript a JavaScript en `build/`. Si cambias el código, vuelve a ejecutarlo antes de `npm start`.
-
-Para analizar el código con Oxlint:
-```
-npm run lint
-```
-
-El linter analiza únicamente `src/`; la carpeta `build/` contiene archivos generados por TypeScript.
-Para aplicar las correcciones automáticas disponibles:
-```
-npm run lint:fix
-```
-
-## Controllers y operaciones asíncronas
-
-Las consultas a MongoDB son operaciones asíncronas: tardan un tiempo y devuelven una
-`Promise`. En los controllers usamos `async/await` para esperar su resultado de forma clara.
-
-La estructura recomendada es:
-
-```ts
-const handler = async (req: Request, res: Response) => {
-  try {
-    const result = await Service.method(req.body);
-    res.status(200).json({ result });
-  } catch (error) {
-    res.status(500).json({ error });
-  }
-};
-```
-
-- `async` permite utilizar `await` dentro de la función.
-- `await` espera a que termine la operación y guarda su resultado.
-- `try` contiene la operación que puede fallar.
-- `catch` devuelve un error `500` si la operación falla.
-
-En este proyecto no devolvemos la respuesta con `return`. El controller la envía directamente
-con `res.status(...).json(...)` o `res.status(...).send()`.
-
-La forma anterior usaba cadenas de Promises:
-
-```ts
-return Service.method(req.body)
-  .then((result) => res.status(200).json({ result }))
-  .catch((error) => res.status(500).json({ error }));
-```
-
-Ambas formas esperan la misma operación, pero `async/await` facilita la lectura y el manejo de
-errores. `return` sigue siendo útil cuando una función necesita devolver un valor o detener su
-ejecución; simplemente no es necesario para enviar una respuesta de Express.
 
 ## Estructura del proyecto
 
 ```
 src/
-  server.ts        Punto de entrada: conecta con MongoDB, registra el middleware y las rutas, engancha el chat y arranca el servidor
+  server.ts        Punto de entrada: conecta con MongoDB, registra el middleware y las rutas y arranca el servidor
   seed.ts          Script que llena la base de datos con los datos de ejemplo
-  migrate-indexes.ts  Script de una sola vez: adapta los índices únicos al borrado lógico
-  migrate-authors.ts  Script de una sola vez: quita password y role de los autores guardados antes del S7
-  seed-data.ts     Los datos de ejemplo: usuarios, autores y libros
+  seed-data.ts     Los datos de ejemplo
   config/          Lee las variables de entorno y las reúne en un objeto config
+    swagger.ts       Las piezas comunes de la documentación de Swagger
   library/         Utilidades compartidas
     Logging.ts       Mensajes de consola con fecha y color (info, warning, error)
   routes/          El mapa de URLs: qué petición va a qué controller
-    Auth.ts, Author.ts, Book.ts, Users.ts
+    Auth.ts, Users.ts, Grade.ts, Date.ts
   middleware/      Lo que se ejecuta entre la ruta y el controller
     VerifyToken.ts   Comprueba el token de la cabecera Authorization y deja el usuario en req.user (401).
                      Aquí se amplía también el tipo Request de Express con req.user
     RequireRole.ts   Deja pasar solo a un rol concreto (403)
-    SocketAuth.ts    Comprueba el token al conectar un socket del chat
-    Joi.ts           Guardas: validan el body (422) y el id de la URL (400)
+    Joi.ts           Guardas: validan el body (422), el id de la URL (400) y la paginación (400)
     Cors.ts          Cabeceras de CORS, configuradas con CORS_ORIGIN
     Logger.ts        Escribe en consola cada petición y su código de respuesta
     ErrorHandler.ts  Convierte cualquier error en su código: 400, 401, 404, 409, 422 o 500
   controllers/     Leen la petición (req), llaman al service y eligen la respuesta (res)
-    Auth.ts, Author.ts, Book.ts, Users.ts
+    Auth.ts, Users.ts, Grade.ts, Date.ts
   services/        Leen y escriben en la base de datos a través de los models. No saben que existe HTTP
-    AuthService.ts, AuthorService.ts, BookService.ts, UserService.ts
+    AuthService.ts, UserService.ts, GradeService.ts, DateService.ts
   models/          Esquemas de Mongoose y las interfaces de cada recurso
     User.ts          Usuario, y las interfaces de los tokens (payload) y de req.user
-    Message.ts       Mensaje del chat, y las interfaces de los eventos de Socket.IO
-    Author.ts, Book.ts
-  sockets/         socket.io: el chat y los avisos del backoffice
-    Chat.ts          Salas, historial y envío de mensajes
-    Notifications.ts Eventos books:changed y authors:changed, que emiten los controllers
+    Grade.ts         Voto de La Orla (A+ o F de un usuario a otro)
+    Date.ts          Date (cita entre dos usuarios); se importa como DateModel
   utils/           Funciones pequeñas sin dependencias de Express
     password.ts      Cifra y comprueba contraseñas con scrypt
+    escape-regexp.ts Escapa el texto de una búsqueda para usarlo en una expresión regular
 ```
 
 Una petición recorre las capas siempre en el mismo orden:
@@ -264,8 +191,9 @@ El recorrido completo:
    registrados). El refresh token no va en el JSON: se deja en una **cookie HttpOnly** (ver más abajo).
 3. En cada petición a una ruta protegida, el cliente envía el token en la cabecera:
    `Authorization: Bearer <token>`.
-4. El middleware `VerifyToken` comprueba la firma y la caducidad, y deja el usuario en `req.user`.
-   Si falta el token, ha caducado o no es válido, responde 401.
+4. El middleware `VerifyToken` comprueba la firma y la caducidad, y que el usuario siga activo, y deja el
+   usuario en `req.user`. Si falta el token, ha caducado, no es válido o la cuenta ya no está activa,
+   responde 401.
 5. El middleware `RequireRole('admin')` comprueba el rol: si el usuario no es `admin`, responde 403.
 6. El access token dura poco (15 minutos). Cuando caduca, el cliente llama a `POST /auth/refresh`
    sin body: el navegador adjunta la cookie y la API responde `{ token }`, un access token nuevo, sin
@@ -298,7 +226,7 @@ primero `VerifyToken`, después `RequireRole` si hace falta un rol, después la 
 el controller. Por ejemplo:
 
 ```ts
-router.delete('/:bookId', VerifyToken, RequireRole('admin'), ValidateId('bookId'), controller.deleteBook);
+router.get('/me', VerifyToken, controller.readMe);
 ```
 
 La autenticación va antes que la validación: a quien no tiene sesión se le responde 401, sin decirle
@@ -308,8 +236,10 @@ si su petición estaba bien formada.
 |---|---|
 | `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` | Cualquiera (refresh necesita la cookie con un refresh token válido) |
 | `/ping`, `/api-docs` | Cualquiera |
-| `/users`, `/users/me` y el chat | Cualquier usuario con sesión |
-| `/authors`, `/books` (todas sus operaciones) | Solo `admin` |
+| `/users/me`, `/users/directory` | Cualquier usuario con sesión |
+| `/users`, `/users/:userId`, `/users/:userId/archive`, `/users/:userId/restore` (gestión de usuarios) | Solo `admin` |
+| `/grades` (votos de La Orla) | Solo `admin` |
+| `/dates` | Cualquier usuario con sesión, cada uno sus propios Dates; el admin, todos. Eliminar es solo del `admin` |
 
 Decisiones y límites, porque es un proyecto de clase:
 
@@ -319,84 +249,49 @@ Decisiones y límites, porque es un proyecto de clase:
   el servidor no puede invalidar un refresh token antes de que caduque, y cerrar sesión consiste en
   borrar la cookie (`/auth/logout`) y que el frontend olvide el access token que tiene en memoria.
 - Al renovar, el servidor vuelve a leer el usuario de la base de datos: si le han cambiado el rol, el
-  token nuevo ya lleva el rol actual; si se ha borrado, responde 401.
+  token nuevo ya lleva el rol actual; si se ha borrado, desactivado o archivado, responde 401.
+
+### Usuarios activos (prehook)
+
+Un admin puede desactivar a un usuario (`active: false`) o archivarlo (`deleted: true`). Ninguno de los dos
+tiene que poder entrar. En lugar de filtrar en cada consulta, el modelo `User` tiene un **prehook de
+Mongoose**: una función que se ejecuta antes de cada consulta de usuarios y le añade el filtro
+`{ active: true, deleted: false }`:
+
+```ts
+UserSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {
+    if (this.getOptions().withInactive) {
+        return;
+    }
+
+    this.where({ active: true, deleted: false });
+});
+```
+
+Como el login busca al usuario por email, a un usuario inactivo o archivado no lo encuentra y responde 401
+con el mismo mensaje de siempre. Lo mismo al renovar el token. Las rutas del admin sí necesitan verlos
+a todos, y se saltan el filtro con `.setOptions({ withInactive: true })`.
+
+¿Y si el usuario ya tenía sesión cuando lo desactivan? Su access token sigue siendo válido hasta 15
+minutos. Para que no pueda seguir usando la API, `VerifyToken` busca en cada petición al usuario del token
+(pasando por el prehook) y, si ya no está activo, responde 401 "Tu cuenta no está activa". El frontend,
+con cualquier 401 que no sea de token caducado, cierra la sesión y lleva al login. Cuesta una consulta a
+MongoDB por petición, que para este proyecto no es un problema.
 
 Para probarlo con curl:
 
 ```
-curl -c cookies.txt -X POST http://localhost:1337/auth/login -H "Content-Type: application/json" -d '{"email":"admin@example.com","password":"seminari7"}'
-curl http://localhost:1337/authors -H "Authorization: Bearer <el token de la respuesta anterior>"
+curl -c cookies.txt -X POST http://localhost:1337/auth/login -H "Content-Type: application/json" -d '{"email":"admin@example.com","password":"studate26"}'
+curl http://localhost:1337/users/me -H "Authorization: Bearer <el token de la respuesta anterior>"
 curl -b cookies.txt -X POST http://localhost:1337/auth/refresh
 ```
 
 `-c` guarda la cookie que deja el login y `-b` la envía en el refresh. Sin `-b`, el refresh responde 401.
 
-## Chat (WebSockets)
-
-Una petición HTTP siempre la empieza el cliente: pregunta y el servidor responde. En un chat, en
-cambio, el servidor tiene que **avisar** al cliente cuando otro usuario escribe. Para eso se usa un
-WebSocket: una conexión que se queda abierta y por la que los dos lados pueden enviar mensajes cuando
-quieran. [socket.io](https://socket.io/) lo hace fácil y se engancha al mismo servidor HTTP que
-Express, así que la API y el chat comparten el puerto 1337. El código está en `src/sockets/Chat.ts`.
-
-Con socket.io todo son **eventos** con un nombre: un lado los envía con `emit` y el otro los recibe
-con `on`.
-
-| Evento | Quién lo envía | Datos | Qué pasa |
-|---|---|---|---|
-| `chat:join` | Cliente | `{ room }` | El servidor mete al cliente en la sala y le contesta con `chat:history` |
-| `chat:history` | Servidor, solo a quien entra | Lista de mensajes | Los 50 últimos de la sala, del más antiguo al más nuevo |
-| `chat:message` | Cliente | `{ room, text }` | El servidor lo guarda en MongoDB y lo reenvía a la sala |
-| `chat:message` | Servidor, a toda la sala | Un mensaje | Le llega a todos los que están en la sala, también a quien lo escribió |
-| `chat:error` | Servidor, a un cliente | `{ message }` | Algo no se ha podido hacer (sala no permitida, mensaje vacío...) |
-| `users:online` | Servidor, a todos | Lista de ids | Quién tiene el chat abierto. Se envía cada vez que alguien entra o sale |
-| `books:changed` | Servidor, a todos | `{ action, id, name, userId }` | Un admin ha creado, editado o borrado un libro (`action` es `created`, `updated` o `deleted`) |
-| `authors:changed` | Servidor, a todos | `{ action, id, name, userId }` | Lo mismo con un autor |
-
-Un mensaje del servidor tiene esta forma: `{ _id, room, user: { _id, name }, text, timestamp }`.
-
-Los dos últimos eventos **no son chat**: son avisos del backoffice. Los emiten los controllers de
-libros y autores después de responder la petición HTTP, a través de `src/sockets/Notifications.ts`,
-con `io.emit` (a todos los conectados, no a una sala). El cliente solo escucha; el chat los enseña en
-la franja "Avisos del backoffice".
-
-El recorrido de un mensaje:
-
-1. El cliente se conecta enviando su access token: `io('http://localhost:1337', { auth: { token } })`.
-   El middleware `SocketAuth` lo comprueba; si no vale, rechaza la conexión con `Authentication error`.
-2. El cliente emite `chat:join` con una sala. El servidor hace `socket.join(sala)` y le envía el
-   historial.
-3. El cliente emite `chat:message`. El servidor coge el autor del token (nunca del mensaje), lo guarda
-   con el modelo `Message` y hace `io.to(sala).emit('chat:message', mensaje)`.
-
-Hay tres niveles de chat, según el nombre de la sala:
-
-| Sala | Nombre | Quién entra |
-|---|---|---|
-| General | `general` | Cualquier usuario con sesión |
-| Grupo | `group:<nombre>`, por ejemplo `group:seminario-7` | Quien conozca el nombre |
-| Directo | `direct:<idA>:<idB>`, con los dos ids ordenados | Solo esos dos usuarios |
-
-Para saber quién está activo, el servidor lleva en memoria los usuarios con el chat abierto (cuenta sus sockets, por si
-tienen varias pestañas) y avisa a todos con `users:online` cada vez que alguien entra o sale. No se guarda en MongoDB.
-
-Los ids se ordenan para que los dos usuarios generen el mismo nombre de sala sin ponerse de acuerdo.
-`GET /users` da la lista de usuarios (solo id y nombre) para elegir con quién hablar. El servidor
-comprueba que quien entra en un chat directo es uno de los dos: si no, responde `chat:error`.
-
-Un límite que conviene saber: el token solo se comprueba al conectar. Si caduca con el socket ya
-abierto, el chat sigue funcionando hasta que se cierra la conexión; al volver a conectar hace falta un
-token válido (el frontend lo renueva solo).
-
-Los tipos de los eventos (`ClientToServerEvents` y `ServerToClientEvents`) están en
-`src/models/Message.ts`: con ellos TypeScript avisa si se emite un evento que no existe o con datos
-equivocados.
-
 ## Endpoints
 
-Todas las rutas salvo `/auth/*` y `/ping` necesitan la cabecera `Authorization: Bearer <token>`, y las
-de autores y libros, además, el rol `admin` (ver [Autenticación](#autenticación)). El chat no usa
-estas rutas: va por WebSocket (ver [Chat](#chat-websockets)).
+Todas las rutas salvo `/auth/*` y `/ping` necesitan la cabecera `Authorization: Bearer <token>` (ver
+[Autenticación](#autenticación)).
 
 | Método | URL | Qué hace | Body |
 |---|---|---|---|
@@ -405,65 +300,87 @@ estas rutas: va por WebSocket (ver [Chat](#chat-websockets)).
 | POST | `/auth/login` | Inicia sesión: devuelve `{ token, user }` y deja el refresh token en una cookie HttpOnly | `{ "email": "...", "password": "..." }` |
 | POST | `/auth/refresh` | Devuelve un access token nuevo: `{ token }`. Lee el refresh token de la cookie | |
 | POST | `/auth/logout` | Borra la cookie del refresh token (204) | |
-| GET | `/users` | Lista los usuarios (`_id` y `name`) para el chat directo. Cualquier usuario con sesión | |
 | GET | `/users/me` | Devuelve el usuario con sesión (`_id`, `name`, `email`, `role`). Lo saca de `req.user` | |
-| POST | `/authors` | Crea un autor | `{ "name": "...", "email": "..." }` |
-| GET | `/authors` | Lista los autores, paginados (`?page=&limit=&search=`) | |
-| GET | `/authors/:authorId` | Devuelve un autor | |
-| PUT | `/authors/:authorId` | Reemplaza los datos de un autor | `{ "name": "...", "email": "..." }` |
-| DELETE | `/authors/:authorId` | Borra un autor (borrado lógico) | |
-| POST | `/books` | Crea un libro | `{ "title": "...", "authors": ["<id de un autor>"], "isbn": "..." }` |
-| GET | `/books` | Lista los libros, paginados (`?page=&limit=&search=`), con los datos de sus autores | |
-| GET | `/books/:bookId` | Devuelve un libro, con los datos de sus autores | |
-| PUT | `/books/:bookId` | Reemplaza los datos de un libro | `{ "title": "...", "authors": ["<id de un autor>"], "isbn": "..." }` |
-| DELETE | `/books/:bookId` | Borra un libro (borrado lógico) | |
-
-Un autor tiene además estos campos opcionales: `birthDate`, `nationality`, `biography`, `website`,
-`photoUrl` y `active`. Desde el Seminario 7 un autor no tiene contraseña ni rol: es un dato del
-backoffice, como un libro. Quien inicia sesión es un usuario (`User`), y su contraseña nunca se
-devuelve en las respuestas.
-
-Un libro tiene además: `edition`, `publisher`, `publishedYear`, `pages`, `language` (`es`, `ca` o `en`),
-`tags` (`ciencia-ficcion`, `fantasia`, `novela`, `ensayo`, `poesia`, `historia`), `price` y `description`.
-Un libro puede tener más de un autor, y necesita al menos uno.
+| GET | `/users/directory` | Con quién puede abrir un Date el usuario con sesión: los demás usuarios activos (nombre, titulación y foto). Cualquier usuario con sesión | |
+| GET | `/users` | Lista los usuarios, paginados (`?page=&limit=&search=&role=&active=&degree=&archived=`). Solo admin | |
+| GET | `/users/:userId` | Devuelve un usuario, también si está inactivo o archivado. Solo admin | |
+| POST | `/users` | Crea un usuario con su rol y si está activo. Solo admin | `{ "name": "...", "email": "...", "password": "...", "role": "user" }` |
+| PUT | `/users/:userId` | Edita un usuario, su rol y si está activo (no la contraseña). Solo admin | `{ "name": "...", "email": "...", "role": "user", "active": true }` |
+| POST | `/users/:userId/archive` | Archiva un usuario (borrado lógico). Solo admin | |
+| POST | `/users/:userId/restore` | Restaura un usuario archivado. Solo admin | |
+| DELETE | `/users/:userId` | Elimina para siempre un usuario archivado (borrado físico) y sus votos. Solo admin | |
+| GET | `/grades` | Lista los votos de La Orla, paginados (`?page=&limit=&value=&user=`). Solo admin | |
+| GET | `/grades/:gradeId` | Devuelve un voto, con los datos de los dos usuarios. Solo admin | |
+| POST | `/grades` | Crea un voto. Solo admin | `{ "from": "<id>", "to": "<id>", "value": "A+" }` |
+| PUT | `/grades/:gradeId` | Cambia la nota de un voto. Solo admin | `{ "value": "F" }` |
+| DELETE | `/grades/:gradeId` | Elimina un voto (borrado físico). Solo admin | |
+| GET | `/dates` | Lista los Dates, paginados (`?page=&limit=&status=&user=`). El admin ve todos; un usuario, los suyos | |
+| GET | `/dates/:dateId` | Devuelve un Date (un usuario, solo los suyos) | |
+| POST | `/dates` | Abre un Date entre dos usuarios (un usuario, solo si es uno de los dos) | `{ "users": ["<id>", "<id>"] }` |
+| PUT | `/dates/:dateId` | Cambia el Date de bandeja | `{ "status": "ongoing" }` |
+| POST | `/dates/:dateId/extend` | Usa la prórroga: 24 horas más, una sola vez | |
+| DELETE | `/dates/:dateId` | Elimina un Date (borrado físico). Solo admin | |
+Un usuario tiene `name`, `email` y `role` (`user` o `admin`), los datos de su perfil (`birthDate`,
+`degree` o titulación, `lookingFor` o "Qué busco", `bio` y `photo`) y el estado de su cuenta: `active`
+(si un admin lo ha desactivado) y `deleted` con `deletedAt` (si está archivado). La contraseña nunca se
+devuelve. La foto se guarda dentro del propio usuario como texto en base64 (`data:image/jpeg;base64,...`),
+con un máximo de 200 000 caracteres: es lo más sencillo para el proyecto y no necesita guardar ficheros.
 
 Ejemplo con curl (también sirve Postman o Thunder Client):
 
 ```
-curl -X POST http://localhost:1337/authors -H "Authorization: Bearer <token>" -H "Content-Type: application/json" -d '{"name":"Ana","email":"ana@example.com"}'
+curl http://localhost:1337/users/me -H "Authorization: Bearer <token>"
 ```
+
+En el listado de usuarios, `search` busca en el nombre y el email sin distinguir mayúsculas; `role` deja
+solo los de un rol; `active=true` o `active=false`, solo los activos o los inactivos; `degree`, solo los de una titulación
+(el texto entero); y `archived=true`,
+solo los archivados (por defecto no salen). Un admin no puede cambiarse su propio rol ni desactivarse:
+responde 403 "No puedes hacer esto con tu propio usuario", para que el backoffice no se quede sin admin.
+
+Un voto de La Orla (`Grade`) es la nota que un usuario (`from`) le pone al perfil de otro (`to`): `A+`
+(aprobado, me interesa) o `F` (suspenso). En las respuestas, `from` y `to` llegan con el nombre, el email
+y la foto del usuario (`populate`), también si está inactivo. Cada usuario solo puede votar una vez a
+cada perfil (409 si se repite) y nadie se puede votar a sí mismo (422). `value` filtra por nota y `user`
+deja los votos en los que participa un usuario. Un voto no se archiva: eliminarlo es un borrado físico.
+
+Un **Date** es una cita entre dos usuarios (`users`). Se abre solo cuando los dos se ponen A+ en La Orla
+(al crear un voto A+ o al cambiar uno a A+, si ya existe el A+ contrario), y también se puede abrir a mano.
+Al abrirse se sortea a quién le toca escribir primero (`firstTurn`) y caduca en 24 horas (`expiresAt`); la
+prórroga (`POST /dates/:dateId/extend`) añade 24 horas más una sola vez (`extended`). Está en una de las
+bandejas del blog (`status`): `pending` (Pendiente), `ongoing` (En curso) o `closed` (Cerrado). Solo puede
+haber un Date entre cada pareja (409). Un usuario normal solo ve, cambia y abre sus propios Dates; los de
+otros le dan 404. Al eliminar un usuario para siempre se borran también sus Dates.
+
+El modelo se llama `Date` en MongoDB, pero en el código se importa como `DateModel`: `Date` ya es la clase de
+fechas de JavaScript, y si el modelo se llamara así, `new Date()` dejaría de funcionar en ese fichero.
 
 Códigos de respuesta: 201 al crear, 200 al leer o modificar, 204 al borrar, 400 si el id de la URL
 no tiene forma de id de MongoDB, 401 si falta el token o no es válido, 403 si el usuario no tiene el
-rol necesario, 404 si el id no existe, 409 si el email o el ISBN ya existen, 422 si el body no es
+rol necesario, 404 si el id no existe, 409 si el email ya existe, 422 si el body no es
 válido y 500 si falla algo en el servidor.
 
-## Soft delete
+## Borrado lógico y borrado físico
 
-Borrar un autor o un libro con `DELETE` **no lo elimina de MongoDB**: lo marca como borrado
-(`deleted: true`) y guarda la fecha en `deletedAt`. A partir de ese momento:
+Hay dos formas de "borrar" un usuario, y en el backoffice se usan en este orden:
 
-- `GET` del listado y `GET` por id ya no lo devuelven (404 en la búsqueda por id).
-- `PUT` sobre un documento borrado devuelve 404: no se puede modificar.
-- El email del autor y el ISBN del libro quedan libres, así que se pueden reutilizar en un documento
-  nuevo.
-- Un autor borrado **sigue apareciendo dentro de sus libros**: el documento sigue existiendo y el
-  `populate('authors')` lo encuentra. Es intencionado: el libro conserva quién lo escribió.
+1. **Archivar** (borrado lógico, *soft delete*): `POST /users/:userId/archive`. El usuario **no se elimina**
+   de MongoDB: se marca con `deleted: true` y la fecha en `deletedAt`. A partir de ahí:
+   - no sale en el listado (sí con `?archived=true`);
+   - no puede iniciar sesión ni renovar el token (lo hace el [prehook](#usuarios-activos-prehook));
+   - no se puede editar (404) hasta que se restaure;
+   - su email sigue ocupado, así que al restaurarlo nunca choca con otro usuario.
+2. **Restaurar**: `POST /users/:userId/restore` deshace el archivado (`deleted: false` y se quita `deletedAt`).
+3. **Eliminar para siempre** (borrado físico, *hard delete*): `DELETE /users/:userId`. El documento
+   desaparece de MongoDB y no se puede deshacer. Solo se puede con un usuario **archivado**; si no, la API
+   responde 409 "Archiva el usuario antes de eliminarlo".
 
-Esto funciona porque los índices únicos de `Author.email` y `Book.isbn` son **parciales**:
-`partialFilterExpression: { deleted: false }`. La unicidad solo se aplica a los documentos no borrados.
+¿Por qué en dos pasos? El borrado lógico es lo normal en una aplicación real: un error se arregla
+restaurando y no se pierden datos. El borrado físico existe para cuando de verdad hay que quitar los datos
+de alguien (por ejemplo, si lo pide el propio usuario), y obligar a archivar antes evita borrar a alguien
+por error con un solo clic.
 
-Mongoose **no** elimina el índice único antiguo de una base de datos que ya existía (solo crea
-índices nuevos). Por eso, si trabajas sobre una base de datos creada antes de esta versión, ejecuta
-una vez:
-
-```
-npm run migrate-indexes
-```
-
-El script borra los índices `email_1` e `isbn_1` antiguos y crea los parciales. Es idempotente: si ya
-están bien, no hace nada. Puedes comprobarlo con `db.authors.getIndexes()` y `db.books.getIndexes()`
-en `mongosh`.
+Un admin no puede archivarse ni eliminarse a sí mismo (403).
 
 ## Documentación de la API
 
@@ -476,13 +393,33 @@ esquemas de Joi que validan las peticiones, así que la documentación no puede 
 cuando se añade o se quita un campo.
 
 Las piezas comunes (datos generales, esquemas, respuestas de error y el esquema de seguridad
-`bearerAuth`) están en `src/config/swagger.ts`. En `src/routes/Auth.ts` la documentación va debajo
+`bearerAuth`) están en `src/config/swagger.ts`. Cada respuesta de error lleva de ejemplo el mensaje que
+devuelve de verdad la API (por ejemplo, `NotArchived`, `OwnUser`, `GradeConflict` o `DateConflict`), para
+que quien hace el frontend sepa qué va a recibir. Las rutas están agrupadas por etiquetas: Health, Auth,
+Users, Grades y Dates. En `src/routes/Auth.ts` la documentación va debajo
 del código, para que el router se lea de un vistazo.
 
 Para probar las rutas protegidas desde Swagger: ejecuta `POST /auth/login`, copia el `token` de la
 respuesta, pulsa el botón **Authorize** de arriba a la derecha y pégalo (solo el token, sin la palabra
 `Bearer`). A partir de ahí Swagger envía la cabecera en todas las peticiones. Las rutas con candado son
 las que lo necesitan.
+
+## Cómo se ha probado la API
+
+No hay tests automáticos en el backend. Al cerrar cada rama se prueba lo hecho contra la API arrancada y
+con la base de datos recién sembrada (`npm run seed -- --reset`), con curl, también los casos de error: sin
+token, con el rol que no toca, con ids que no existen o mal formados, con el body mal y con las reglas de
+cada recurso (archivar antes de eliminar, un voto por pareja, una prórroga por Date...). Cada entrada de la
+bitácora de [LOGS.md](LOGS.md) dice qué se probó y cuántas pruebas salieron bien. Un ejemplo:
+
+```
+curl -c cookies.txt -X POST http://localhost:1337/auth/login -H "Content-Type: application/json" -d '{"email":"admin@example.com","password":"studate26"}'
+curl "http://localhost:1337/users?archived=true" -H "Authorization: Bearer <token>"
+curl -X DELETE http://localhost:1337/users/<id de un usuario no archivado> -H "Authorization: Bearer <token>"
+```
+
+La última responde 409 "Archiva el usuario antes de eliminarlo". Las mismas pruebas se pueden hacer desde
+la página de Swagger.
 
 ## Cómo contribuir
 
