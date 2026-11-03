@@ -43,13 +43,15 @@ const createGrade = async (req: Request, res: Response, next: NextFunction) => {
         } else if (result.error === 'same-user') {
             // 422: el body tiene buena forma, pero no tiene sentido votarse a uno mismo
             res.status(422).json({ message: 'Un usuario no se puede votar a sí mismo' });
+        } else if (result.error === 'already-voted') {
+            // 409: esa pareja ya tiene voto (para cambiar la nota esta PUT)
+            res.status(409).json({ message: 'Este usuario ya ha votado ese perfil' });
         } else if (result.error === 'from-not-found') {
             res.status(404).json({ message: 'El usuario que vota (from) no existe' });
         } else {
             res.status(404).json({ message: 'El usuario votado (to) no existe' });
         }
     } catch (error) {
-        // Si la pareja ya tenia voto, el ErrorHandler responde 409
         next(error);
     }
 };
