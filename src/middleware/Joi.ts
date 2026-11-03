@@ -2,6 +2,7 @@ import Joi, { ObjectSchema } from 'joi';
 
 import { NextFunction, Request, Response } from 'express';
 
+import { DATE_STATUSES, DateStatus } from '../models/Date';
 import { GRADE_VALUES, GradeValue, IGrade } from '../models/Grade';
 import { IUser, PHOTO_MAX_LENGTH, USER_ROLES, UserRole } from '../models/User';
 
@@ -18,6 +19,14 @@ export interface UserListQuery extends PaginationQuery {
     active?: boolean;
     degree?: string;
     archived: boolean;
+}
+
+// Los filtros del listado de Dates: la paginacion, el estado y un usuario
+export interface DateListQuery {
+    page: number;
+    limit: number;
+    status?: DateStatus;
+    user?: string;
 }
 
 // Los filtros del listado de votos de La Orla: la paginacion, la nota y un usuario
@@ -116,6 +125,18 @@ export const Schemas = {
         archived: Joi.boolean().default(false)
     }),
 
+    // Validacion de los filtros del listado de Dates
+    dateList: Joi.object<DateListQuery>({
+        page: Joi.number().integer().min(1).default(1),
+        limit: Joi.number().integer().min(1).max(100).default(5),
+
+        // Solo los de una bandeja: pending, ongoing o closed
+        status: Joi.string().valid(...DATE_STATUSES),
+
+        // Solo los de este usuario (este filtro solo lo usa el admin)
+        user: Joi.string().regex(OBJECT_ID)
+    }),
+
     // Validacion de los filtros del listado de votos
     gradeList: Joi.object<GradeListQuery>({
         page: Joi.number().integer().min(1).default(1),
@@ -198,11 +219,44 @@ export const Schemas = {
                 .valid(...GRADE_VALUES)
                 .required()
         })
+    },
+
+    // Validaciones de los Dates
+    date: {
+        // Abrir un Date: los ids de los dos usuarios, distintos entre si
+        create: Joi.object({
+            users: Joi.array()
+                .items(Joi.string().regex(OBJECT_ID))
+                .length(2)
+                .unique()
+                .required()
+                .example(['6ab3f2fe9c500204a7d5f8a3', '6ab3f2fe9c500204a7d5f8a4'])
+        }),
+
+        // Cambiar de bandeja: solo el estado
+        update: Joi.object({
+            status: Joi.string()
+                .valid(...DATE_STATUSES)
+                .required()
+                .example('ongoing')
+        })
     }
 };
 
 export const ValidatePagination = (req: Request, res: Response, next: NextFunction) => {
     const { error, value } = Schemas.pagination.validate(req.query);
+
+    if (error) {
+        return res.status(400).json({ message: error.details[0].message });
+    }
+
+    res.locals.query = value;
+    next();
+};
+
+// Igual que ValidatePagination, pero con los filtros del listado de Dates
+export const ValidateDateList = (req: Request, res: Response, next: NextFunction) => {
+    const { error, value } = Schemas.dateList.validate(req.query);
 
     if (error) {
         return res.status(400).json({ message: error.details[0].message });

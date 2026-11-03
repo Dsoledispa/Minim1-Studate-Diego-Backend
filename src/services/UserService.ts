@@ -1,3 +1,4 @@
+import DateModel from '../models/Date';
 import Grade from '../models/Grade';
 import User, { IUser, UserRole } from '../models/User';
 import type { UserListQuery } from '../middleware/Joi';
@@ -119,10 +120,10 @@ export const deleteUser = async (userId: string): Promise<DeleteUserResult> => {
         return 'not-archived';
     }
 
-    // Con el usuario se borran sus votos de La Orla (los que dio y los que recibio): si no, quedarian
-    // votos que apuntan a un usuario que ya no existe.
-    // Cuando existan los Dates, aqui se borraran tambien los del usuario
+    // Con el usuario se borran sus votos de La Orla (los que dio y los que recibio) y sus Dates: si no,
+    // quedarian datos que apuntan a un usuario que ya no existe
     await Grade.deleteMany({ $or: [{ from: userId }, { to: userId }] });
+    await DateModel.deleteMany({ users: userId });
     await User.deleteOne({ _id: userId });
 
     return 'deleted';

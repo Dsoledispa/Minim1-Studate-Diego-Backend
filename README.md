@@ -99,8 +99,8 @@ del proyecto.
 ## Llenar la base de datos (la primera vez)
 
 Si arrancas con la base de datos vacía, la API funciona pero no devuelve nada y no hay ningún usuario
-con el que iniciar sesión. Para tener datos con los que probar, hay 14 usuarios y 25 votos de La Orla de
-ejemplo en `src/seed-data.ts`: un admin, un usuario normal y doce estudiantes con su perfil. De los estudiantes,
+con el que iniciar sesión. Para tener datos con los que probar, hay 14 usuarios, 25 votos de La Orla
+y 4 Dates de ejemplo en `src/seed-data.ts` (los Dates salen de las cuatro parejas que se han dado A+): un admin, un usuario normal y doce estudiantes con su perfil. De los estudiantes,
 dos están inactivos y dos archivados, para poder probar el prehook de activos y el borrado lógico:
 
 ```
@@ -143,7 +143,7 @@ src/
   library/         Utilidades compartidas
     Logging.ts       Mensajes de consola con fecha y color (info, warning, error)
   routes/          El mapa de URLs: qué petición va a qué controller
-    Auth.ts, Users.ts, Grade.ts
+    Auth.ts, Users.ts, Grade.ts, Date.ts
   middleware/      Lo que se ejecuta entre la ruta y el controller
     VerifyToken.ts   Comprueba el token de la cabecera Authorization y deja el usuario en req.user (401).
                      Aquí se amplía también el tipo Request de Express con req.user
@@ -153,12 +153,13 @@ src/
     Logger.ts        Escribe en consola cada petición y su código de respuesta
     ErrorHandler.ts  Convierte cualquier error en su código: 400, 401, 404, 409, 422 o 500
   controllers/     Leen la petición (req), llaman al service y eligen la respuesta (res)
-    Auth.ts, Users.ts, Grade.ts
+    Auth.ts, Users.ts, Grade.ts, Date.ts
   services/        Leen y escriben en la base de datos a través de los models. No saben que existe HTTP
-    AuthService.ts, UserService.ts, GradeService.ts
+    AuthService.ts, UserService.ts, GradeService.ts, DateService.ts
   models/          Esquemas de Mongoose y las interfaces de cada recurso
     User.ts          Usuario, y las interfaces de los tokens (payload) y de req.user
     Grade.ts         Voto de La Orla (A+ o F de un usuario a otro)
+    Date.ts          Date (cita entre dos usuarios); se importa como DateModel
   utils/           Funciones pequeñas sin dependencias de Express
     password.ts      Cifra y comprueba contraseñas con scrypt
     escape-regexp.ts Escapa el texto de una búsqueda para usarlo en una expresión regular
@@ -238,6 +239,7 @@ si su petición estaba bien formada.
 | `/users/me` | Cualquier usuario con sesión |
 | `/users`, `/users/:userId`, `/users/:userId/archive`, `/users/:userId/restore` (gestión de usuarios) | Solo `admin` |
 | `/grades` (votos de La Orla) | Solo `admin` |
+| `/dates` | Cualquier usuario con sesión, cada uno sus propios Dates; el admin, todos. Eliminar es solo del `admin` |
 
 Decisiones y límites, porque es un proyecto de clase:
 
@@ -311,6 +313,12 @@ Todas las rutas salvo `/auth/*` y `/ping` necesitan la cabecera `Authorization: 
 | POST | `/grades` | Crea un voto. Solo admin | `{ "from": "<id>", "to": "<id>", "value": "A+" }` |
 | PUT | `/grades/:gradeId` | Cambia la nota de un voto. Solo admin | `{ "value": "F" }` |
 | DELETE | `/grades/:gradeId` | Elimina un voto (borrado físico). Solo admin | |
+| GET | `/dates` | Lista los Dates, paginados (`?page=&limit=&status=&user=`). El admin ve todos; un usuario, los suyos | |
+| GET | `/dates/:dateId` | Devuelve un Date (un usuario, solo los suyos) | |
+| POST | `/dates` | Abre un Date entre dos usuarios (un usuario, solo si es uno de los dos) | `{ "users": ["<id>", "<id>"] }` |
+| PUT | `/dates/:dateId` | Cambia el Date de bandeja | `{ "status": "ongoing" }` |
+| POST | `/dates/:dateId/extend` | Usa la prórroga: 24 horas más, una sola vez | |
+| DELETE | `/dates/:dateId` | Elimina un Date (borrado físico). Solo admin | |
 Un usuario tiene `name`, `email` y `role` (`user` o `admin`), los datos de su perfil (`birthDate`,
 `degree` o titulación, `lookingFor` o "Qué busco", `bio` y `photo`) y el estado de su cuenta: `active`
 (si un admin lo ha desactivado) y `deleted` con `deletedAt` (si está archivado). La contraseña nunca se
@@ -334,6 +342,17 @@ Un voto de La Orla (`Grade`) es la nota que un usuario (`from`) le pone al perfi
 y la foto del usuario (`populate`), también si está inactivo. Cada usuario solo puede votar una vez a
 cada perfil (409 si se repite) y nadie se puede votar a sí mismo (422). `value` filtra por nota y `user`
 deja los votos en los que participa un usuario. Un voto no se archiva: eliminarlo es un borrado físico.
+
+Un **Date** es una cita entre dos usuarios (`users`). Se abre solo cuando los dos se ponen A+ en La Orla
+(al crear un voto A+ o al cambiar uno a A+, si ya existe el A+ contrario), y también se puede abrir a mano.
+Al abrirse se sortea a quién le toca escribir primero (`firstTurn`) y caduca en 24 horas (`expiresAt`); la
+prórroga (`POST /dates/:dateId/extend`) añade 24 horas más una sola vez (`extended`). Está en una de las
+bandejas del blog (`status`): `pending` (Pendiente), `ongoing` (En curso) o `closed` (Cerrado). Solo puede
+haber un Date entre cada pareja (409). Un usuario normal solo ve, cambia y abre sus propios Dates; los de
+otros le dan 404. Al eliminar un usuario para siempre se borran también sus Dates.
+
+El modelo se llama `Date` en MongoDB, pero en el código se importa como `DateModel`: `Date` ya es la clase de
+fechas de JavaScript, y si el modelo se llamara así, `new Date()` dejaría de funcionar en ese fichero.
 
 Códigos de respuesta: 201 al crear, 200 al leer o modificar, 204 al borrar, 400 si el id de la URL
 no tiene forma de id de MongoDB, 401 si falta el token o no es válido, 403 si el usuario no tiene el
