@@ -29,6 +29,7 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
 - **Usuario**: `{ _id, name, email, role, birthDate?, degree?, lookingFor?, bio?, photo?, active, deleted, deletedAt?, createdAt, updatedAt }`, nunca con
   contraseña. `photo` es una imagen PNG o JPG en base64 (`data:image/...;base64,...`, 200 000 caracteres como mucho).
 - **Usuarios inactivos y archivados**: no pueden iniciar sesión ni renovar el token (401 con el mensaje de siempre). Lo hace el prehook del modelo.
+  Si ya tenían sesión, cualquier petición con su token responde 401 `{ message: 'Tu cuenta no está activa' }` y el frontend cierra la sesión.
 - **Gestión de usuarios** (solo `admin`):
   - `GET /users?page=&limit=&search=&role=&active=&degree=&archived=` responde `{ users, total, page, pages }`, ordenados por nombre. `search` busca en
     nombre y email; `role` es `user` o `admin`; `active` es `true` o `false`; `degree` es una titulación entera; `archived=true` lista solo los
@@ -219,3 +220,20 @@ La bitácora del Seminario 7, de donde viene este código, se conserva en el tag
   de Aeroespacial y combinado con `active=true` sigue funcionando.
 - Prompt de IA usado: «Empezamos por la lista de usuarios paginada con búsqueda y filtros [...] quiero 10 usuarios por página y
   algunos filtros, los más típicos. ¿Qué filtros me sugieres?» (conversación del frontend).
+
+### 2026-11-03 · Un usuario desactivado deja de poder usar la API al momento
+
+- Al hacer el formulario de usuario (frontend) salió el problema: "si un usuario no está activo, no puede usar la API". El prehook solo
+  actuaba en el login y en el refresh; un usuario con sesión al que el admin desactivaba seguía usando la API con su access token hasta
+  que caducaba (15 minutos como mucho), que es justo el límite que se había dejado documentado. Se vuelve a la rama `users` para
+  arreglarlo.
+- `VerifyToken` pasa a ser `async` y, después de verificar el token, busca al usuario con `UserService.getUserById`. Como pasa por el
+  prehook, no encuentra a los inactivos ni a los archivados: en ese caso responde 401 "Tu cuenta no está activa". El interceptor del
+  frontend, con un 401 que no es de token caducado, ya cerraba la sesión y llevaba al login, así que allí no hay que tocar nada.
+- Decisión: el rol sigue saliendo del token (es lo que pide el enunciado: el rol en el payload del JWT); solo se mira en la base de datos
+  si la cuenta sigue activa.
+- Validación ejecutada: `npm run build` y `npm run lint`; con curl, Laia con su token: `/users/me` 200; el admin la desactiva y con el
+  mismo token responde 401 "Tu cuenta no está activa"; reactivada, 200 otra vez; archivada, 401; las rutas del admin siguen dando 200 y
+  sin token 401.
+- Prompt de IA usado: «Lo de activo es importante, porque todo lo que venga después tiene que saber si un usuario está activo o no: si
+  no lo está, no puede usar la API.» (conversación del formulario de usuario, en el frontend).

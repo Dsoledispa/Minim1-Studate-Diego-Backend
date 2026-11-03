@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/config';
 import type { AccessTokenPayload, AuthUser } from '../models/User';
+import UserService from '../services/UserService';
 
 // Express no sabe que nosotros añadimos req.user en este middleware.
 // Aqui ampliamos su tipo Request para que TypeScript conozca ese campo en todos los
@@ -20,7 +21,12 @@ declare global {
 // El token llega en la cabecera:   Authorization: Bearer eyJhbGciOi...
 //
 // Si es valido, deja el usuario en req.user para los siguientes middlewares y controladores.
-export const VerifyToken = (req: Request, res: Response, next: NextFunction) => {
+//
+// Ademas comprueba en la base de datos que el usuario sigue activo. El token dura 15 minutos: sin esta
+// comprobacion, un usuario al que un admin desactiva o archiva podria seguir usando la API hasta que
+// le caducara. getUserById pasa por el prehook del modelo, asi que no encuentra a los inactivos ni a
+// los archivados. Responder 401 hace que el frontend cierre la sesion y lleve al login.
+export const VerifyToken = async (req: Request, res: Response, next: NextFunction) => {
     const header = req.headers.authorization;
 
     // Sin cabecera, o con una que no empieza por "Bearer ", no hay sesion
@@ -36,6 +42,13 @@ export const VerifyToken = (req: Request, res: Response, next: NextFunction) => 
         // Si algo falla lanza un error: TokenExpiredError si ha caducado, JsonWebTokenError si
         // la firma no es correcta o el token esta mal formado
         const payload = jwt.verify(token, config.jwt.secret) as AccessTokenPayload;
+
+        // El usuario del token tiene que seguir existiendo y estar activo
+        const user = await UserService.getUserById(payload.sub);
+
+        if (!user) {
+            return res.status(401).json({ message: 'Tu cuenta no está activa' });
+        }
 
         req.user = { id: payload.sub, role: payload.role };
 

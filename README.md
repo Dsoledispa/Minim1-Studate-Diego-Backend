@@ -189,8 +189,9 @@ El recorrido completo:
    registrados). El refresh token no va en el JSON: se deja en una **cookie HttpOnly** (ver más abajo).
 3. En cada petición a una ruta protegida, el cliente envía el token en la cabecera:
    `Authorization: Bearer <token>`.
-4. El middleware `VerifyToken` comprueba la firma y la caducidad, y deja el usuario en `req.user`.
-   Si falta el token, ha caducado o no es válido, responde 401.
+4. El middleware `VerifyToken` comprueba la firma y la caducidad, y que el usuario siga activo, y deja el
+   usuario en `req.user`. Si falta el token, ha caducado, no es válido o la cuenta ya no está activa,
+   responde 401.
 5. El middleware `RequireRole('admin')` comprueba el rol: si el usuario no es `admin`, responde 403.
 6. El access token dura poco (15 minutos). Cuando caduca, el cliente llama a `POST /auth/refresh`
    sin body: el navegador adjunta la cookie y la API responde `{ token }`, un access token nuevo, sin
@@ -266,6 +267,12 @@ UserSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], functi
 Como el login busca al usuario por email, a un usuario inactivo o archivado no lo encuentra y responde 401
 con el mismo mensaje de siempre. Lo mismo al renovar el token. Las rutas del admin sí necesitan verlos
 a todos, y se saltan el filtro con `.setOptions({ withInactive: true })`.
+
+¿Y si el usuario ya tenía sesión cuando lo desactivan? Su access token sigue siendo válido hasta 15
+minutos. Para que no pueda seguir usando la API, `VerifyToken` busca en cada petición al usuario del token
+(pasando por el prehook) y, si ya no está activo, responde 401 "Tu cuenta no está activa". El frontend,
+con cualquier 401 que no sea de token caducado, cierra la sesión y lleva al login. Cuesta una consulta a
+MongoDB por petición, que para este proyecto no es un problema.
 
 Para probarlo con curl:
 
