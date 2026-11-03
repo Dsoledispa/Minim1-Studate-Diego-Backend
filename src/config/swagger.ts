@@ -11,6 +11,8 @@ import { config } from './config';
 // peticiones, así que no se pueden quedar desfasados.
 const { swagger: registerInput } = j2s(Schemas.auth.register);
 const { swagger: loginInput } = j2s(Schemas.auth.login);
+const { swagger: userInput } = j2s(Schemas.user.create);
+const { swagger: userUpdateInput } = j2s(Schemas.user.update);
 
 // Lo que devuelve la API no es igual a lo que se envía: lleva el _id y las fechas que
 // pone MongoDB, y el usuario nunca devuelve la contraseña.
@@ -90,7 +92,7 @@ const swaggerDocument = swaggerJsdoc({
         tags: [
             { name: 'Health', description: 'Comprobar que la API responde' },
             { name: 'Auth', description: 'Registro, login, renovación del token y logout' },
-            { name: 'Users', description: 'Usuarios' }
+            { name: 'Users', description: 'Usuarios: el de la sesión y la gestión de usuarios del backoffice (solo admin)' }
         ],
         // Por defecto todas las rutas piden el token (el candado de Swagger).
         // Las rutas públicas lo quitan con security: [] en su comentario @openapi.
@@ -107,6 +109,8 @@ const swaggerDocument = swaggerJsdoc({
             schemas: {
                 RegisterInput: registerInput,
                 LoginInput: loginInput,
+                UserInput: userInput,
+                UserUpdateInput: userUpdateInput,
                 User: userSchema
             },
             responses: {
@@ -124,6 +128,21 @@ const swaggerDocument = swaggerJsdoc({
                 BadCredentials: errorResponse('El email o la contraseña no son correctos', 'Email o contraseña incorrectos'),
                 Unauthorized: errorResponse('Falta el token, ha caducado o no es válido', 'El token ha caducado'),
                 Forbidden: errorResponse('El usuario no tiene el rol necesario', 'Necesitas el rol admin'),
+                OwnUser: errorResponse('Un admin no puede hacer esto con su propio usuario', 'No puedes hacer esto con tu propio usuario'),
+                UserOne: okResponse('Un usuario', { type: 'object', properties: { user: userSchema } }, { user: userExample }),
+                UserList: okResponse(
+                    'Una página de usuarios y los datos de paginación',
+                    {
+                        type: 'object',
+                        properties: {
+                            users: { type: 'array', items: userSchema },
+                            total: { type: 'integer', example: 12 },
+                            page: { type: 'integer', example: 1 },
+                            pages: { type: 'integer', example: 2 }
+                        }
+                    },
+                    { users: [userExample], total: 12, page: 1, pages: 2 }
+                ),
                 BadRequest: errorResponse('El id de la URL no tiene forma de id de MongoDB', 'userId no es un id válido'),
                 InvalidPagination: errorResponse('Los parámetros de paginación o búsqueda no son válidos', '"page" must be greater than or equal to 1'),
                 NotFound: errorResponse('No existe ningún recurso con ese id', 'not found'),

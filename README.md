@@ -234,6 +234,7 @@ si su petición estaba bien formada.
 | `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` | Cualquiera (refresh necesita la cookie con un refresh token válido) |
 | `/ping`, `/api-docs` | Cualquiera |
 | `/users/me` | Cualquier usuario con sesión |
+| `/users`, `/users/:userId` (gestión de usuarios) | Solo `admin` |
 
 Decisiones y límites, porque es un proyecto de clase:
 
@@ -289,6 +290,10 @@ Todas las rutas salvo `/auth/*` y `/ping` necesitan la cabecera `Authorization: 
 | POST | `/auth/refresh` | Devuelve un access token nuevo: `{ token }`. Lee el refresh token de la cookie | |
 | POST | `/auth/logout` | Borra la cookie del refresh token (204) | |
 | GET | `/users/me` | Devuelve el usuario con sesión (`_id`, `name`, `email`, `role`). Lo saca de `req.user` | |
+| GET | `/users` | Lista los usuarios, paginados (`?page=&limit=&search=&role=&active=&archived=`). Solo admin | |
+| GET | `/users/:userId` | Devuelve un usuario, también si está inactivo o archivado. Solo admin | |
+| POST | `/users` | Crea un usuario con su rol y si está activo. Solo admin | `{ "name": "...", "email": "...", "password": "...", "role": "user" }` |
+| PUT | `/users/:userId` | Edita un usuario, su rol y si está activo (no la contraseña). Solo admin | `{ "name": "...", "email": "...", "role": "user", "active": true }` |
 Un usuario tiene `name`, `email` y `role` (`user` o `admin`), los datos de su perfil (`birthDate`,
 `degree` o titulación, `lookingFor` o "Qué busco", `bio` y `photo`) y el estado de su cuenta: `active`
 (si un admin lo ha desactivado) y `deleted` con `deletedAt` (si está archivado). La contraseña nunca se
@@ -300,6 +305,11 @@ Ejemplo con curl (también sirve Postman o Thunder Client):
 ```
 curl http://localhost:1337/users/me -H "Authorization: Bearer <token>"
 ```
+
+En el listado de usuarios, `search` busca en el nombre y el email sin distinguir mayúsculas; `role` deja
+solo los de un rol; `active=true` o `active=false`, solo los activos o los inactivos; y `archived=true`,
+solo los archivados (por defecto no salen). Un admin no puede cambiarse su propio rol ni desactivarse:
+responde 403 "No puedes hacer esto con tu propio usuario", para que el backoffice no se quede sin admin.
 
 Códigos de respuesta: 201 al crear, 200 al leer o modificar, 204 al borrar, 400 si el id de la URL
 no tiene forma de id de MongoDB, 401 si falta el token o no es válido, 403 si el usuario no tiene el

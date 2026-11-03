@@ -26,6 +26,19 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
 - **Errores de autenticación**: 401 si falta el token, ha caducado (`{ message: 'El token ha caducado' }`) o no es válido (`{ message: 'Token no válido' }`); 403 si hay sesión pero no el rol
   necesario.
 - **Usuario con sesión**: `GET /users/me` (con sesión, cualquier rol) responde `{ user: { _id, name, email, role } }`, a partir del token (`req.user`).
+- **Usuario**: `{ _id, name, email, role, birthDate?, degree?, lookingFor?, bio?, photo?, active, deleted, deletedAt?, createdAt, updatedAt }`, nunca con
+  contraseña. `photo` es una imagen PNG o JPG en base64 (`data:image/...;base64,...`, 200 000 caracteres como mucho).
+- **Usuarios inactivos y archivados**: no pueden iniciar sesión ni renovar el token (401 con el mensaje de siempre). Lo hace el prehook del modelo.
+- **Gestión de usuarios** (solo `admin`):
+  - `GET /users?page=&limit=&search=&role=&active=&archived=` responde `{ users, total, page, pages }`, ordenados por nombre. `search` busca en nombre
+    y email; `role` es `user` o `admin`; `active` es `true` o `false`; `archived=true` lista solo los archivados (por defecto no salen). 400 si un
+    filtro no es válido.
+  - `GET /users/:userId` responde `{ user }`, también si está inactivo o archivado; 404 si no existe.
+  - `POST /users` con `{ name, email, password, role?, active?, birthDate?, degree?, lookingFor?, bio?, photo? }` responde 201 `{ user }`; 409 si el
+    email existe, 422 si el cuerpo no vale.
+  - `PUT /users/:userId` con lo mismo salvo `password` (`name` y `email` obligatorios) responde 200 `{ user }`; 404 si no existe o está archivado.
+    `photo: ''` quita la foto.
+  - Un admin no puede cambiarse su propio rol ni desactivarse: 403 `{ message: 'No puedes hacer esto con tu propio usuario' }`.
 
 ## Tareas
 
@@ -42,7 +55,7 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
 
 - [x] Modelo User ampliado (perfil, activo, archivado) y datos de ejemplo · Diego
 - [x] Prehook de Mongoose "está activo" · Diego
-- [ ] Gestión de usuarios: listado paginado, búsqueda, editar y cambiar rol · Diego
+- [x] Gestión de usuarios: listado paginado, búsqueda, editar y cambiar rol · Diego
 - [ ] Archivar, restaurar y eliminar para siempre (usuarios) · Diego
 
 #### La Orla (`grades`)
@@ -140,3 +153,31 @@ La bitácora del Seminario 7, de donde viene este código, se conserva en el tag
   inactivos `aina` e `iker` y los archivados `sara` y `dani`, 401 "Email o contraseña incorrectos".
 - Prompt de IA usado: «Ahora el prehook de Mongoose de "está activo". No me acuerdo bien de en qué consistía.
   Explícame de qué va, por qué tiene sentido esta tarea, y dame el plan de acción.»
+
+### 2026-11-03 · Gestión de usuarios: listado paginado, búsqueda, editar y cambiar rol
+
+- Rutas de admin en `routes/Users.ts`, cada una con su cadena `VerifyToken` → `RequireRole('admin')` → validación →
+  controller y su comentario de Swagger: `GET /users` (con filtros), `GET /users/:userId`, `POST /users` y `PUT /users/:userId`.
+  `/me` va antes que `/:userId` para que Express no tome "me" por un id.
+- El listado copia la forma de la paginación de libros del seminario (`skip`, `limit` y `countDocuments` con el mismo filtro,
+  respuesta `{ users, total, page, pages }`) y le añade los filtros `role`, `active` y `archived`. Se validan con un esquema
+  de Joi nuevo (`userList`) y el middleware `ValidateUserList`, que es igual que `ValidatePagination`: Joi convierte
+  `"false"` de la URL en `false`.
+- Las funciones del admin se saltan el prehook con `setOptions({ withInactive: true })`: si no, el admin no vería a los
+  inactivos ni a los archivados.
+- Joi: `user.create` y `user.update` comparten los campos del perfil (escritos una sola vez). La contraseña no está en
+  `update`, así que enviarla da 422. La foto tiene que empezar por `data:image/png;base64,` o `data:image/jpeg;base64,`.
+- Decisiones:
+  - Un usuario archivado no se puede editar (404): primero hay que restaurarlo.
+  - Un admin no puede cambiarse su propio rol ni desactivarse: 403 "No puedes hacer esto con tu propio usuario". Si se
+    pudiera, el backoffice se podría quedar sin ningún admin.
+- Contrato de la gestión de usuarios escrito arriba (y copiado al LOGS.md del frontend en su rama).
+- Validación ejecutada: `npm run build` y `npm run lint` sin errores. Con la API arrancada y el seed recién hecho, 30 pruebas con
+  curl, todas correctas: listado por defecto (12 no archivados, 3 páginas de 5, sin contraseñas), `limit=10&page=2`, búsqueda por
+  nombre y por email, `role=admin`, `active=false` (Aina e Iker), `archived=true` (Sara y Dani), 400 con `page=0` y con un rol que
+  no existe; GET de una inactiva y de una archivada (200), de un id inexistente (404) y mal formado (400); POST correcto (201, sin
+  contraseña en la respuesta), con email repetido (409), sin contraseña (422) y con una foto que no es imagen (422); PUT cambiando
+  el rol, reactivando a Aina (y después su login da 200), a una archivada (404), con contraseña (422), el admin quitándose el rol
+  o desactivándose (403) y editando su nombre (200); como `user`, 403 en listado, detalle y creación; sin token, 401.
+- Prompt de IA usado: «Siguiente: gestión de usuarios, listado paginado, búsqueda, editar y cambiar rol. Hay que montar esta
+  funcionalidad. ¿Cómo lo harías? ¿Cuál sería el plan de acción?»
