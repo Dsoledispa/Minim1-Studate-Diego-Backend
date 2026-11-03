@@ -147,6 +147,27 @@ UserSchema.pre('save', async function () {
     this.password = await hashPassword(String(this.password));
 });
 
+// Prehook de "está activo": se ejecuta antes de cada consulta de usuarios (find, findOne, findById, que
+// por dentro es un findOne, findOneAndUpdate y countDocuments) y le añade el filtro
+// { active: true, deleted: false }. Así, por defecto, la aplicación solo "ve" a los usuarios activos y
+// no archivados, sin tener que acordarse de filtrar en cada consulta. Por ejemplo:
+//   - el login busca el usuario por email: si está inactivo o archivado no lo encuentra y responde 401
+//   - el refresh vuelve a leer el usuario: si lo han desactivado, ya no le da un token nuevo
+//
+// El admin sí necesita verlos todos (para reactivarlos o restaurarlos). Para saltarse el filtro, la
+// consulta lleva la opción withInactive:
+//
+//     User.find(filtro).setOptions({ withInactive: true })
+//
+UserSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {
+    // getOptions() devuelve las opciones de la consulta, también las nuestras (como withInactive)
+    if (this.getOptions().withInactive) {
+        return;
+    }
+
+    this.where({ active: true, deleted: false });
+});
+
 // Este hook se ejecuta despues de guardar correctamente el usuario
 UserSchema.post('save', function (user) {
     // Simulamos el envio de un email de bienvenida

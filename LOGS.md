@@ -41,7 +41,7 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
 #### Usuarios (`users`)
 
 - [x] Modelo User ampliado (perfil, activo, archivado) y datos de ejemplo · Diego
-- [ ] Prehook de Mongoose "está activo" · Diego
+- [x] Prehook de Mongoose "está activo" · Diego
 - [ ] Gestión de usuarios: listado paginado, búsqueda, editar y cambiar rol · Diego
 - [ ] Archivar, restaurar y eliminar para siempre (usuarios) · Diego
 
@@ -122,3 +122,21 @@ La bitácora del Seminario 7, de donde viene este código, se conserva en el tag
   contraseña. Todavía un usuario inactivo puede iniciar sesión: lo resuelve el prehook (siguiente tarea).
 - Prompt de IA usado: «Empezamos por el modelo User. Antes de tocar nada, dime qué campos tendría, cómo quedaría la
   estructura del modelo, y ponme ejemplos de cada campo para ver qué necesitamos de verdad.»
+
+### 2026-11-03 · Prehook de Mongoose "está activo"
+
+- Qué pide la tarea: que un usuario desactivado no pueda usar la aplicación, resuelto con un hook de Mongoose en
+  lugar de repetir el filtro en cada consulta.
+- `UserSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], ...)` añade
+  `{ active: true, deleted: false }` a todas las consultas de usuarios. `findById` también queda filtrado, porque
+  por dentro es un `findOne`. Se incluyen los archivados porque tampoco tienen que poder entrar.
+- Para que el admin pueda ver y reactivar a todos, la consulta se salta el filtro con la opción propia
+  `.setOptions({ withInactive: true })`, que el hook lee con `this.getOptions()`.
+- Qué cambia sin tocar los services: el login (que busca por email) no encuentra al usuario inactivo o archivado
+  y responde 401 con el mismo mensaje de siempre; el refresh (`findById`) también responde 401.
+- Validación ejecutada: `npm run build` y `npm run lint` sin errores. Con un script de prueba con `tsx` (fuera del
+  repositorio): `User.countDocuments()` da 10 y con `withInactive` da 14; `find()` igual; `findOne` de la usuaria
+  inactiva da `null` y con `withInactive` la encuentra. Con la API arrancada, 6 logins: `laia` y `admin` 200; los
+  inactivos `aina` e `iker` y los archivados `sara` y `dani`, 401 "Email o contraseña incorrectos".
+- Prompt de IA usado: «Ahora el prehook de Mongoose de "está activo". No me acuerdo bien de en qué consistía.
+  Explícame de qué va, por qué tiene sentido esta tarea, y dame el plan de acción.»

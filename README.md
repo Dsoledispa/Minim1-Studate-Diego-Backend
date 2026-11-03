@@ -243,7 +243,28 @@ Decisiones y límites, porque es un proyecto de clase:
   el servidor no puede invalidar un refresh token antes de que caduque, y cerrar sesión consiste en
   borrar la cookie (`/auth/logout`) y que el frontend olvide el access token que tiene en memoria.
 - Al renovar, el servidor vuelve a leer el usuario de la base de datos: si le han cambiado el rol, el
-  token nuevo ya lleva el rol actual; si se ha borrado, responde 401.
+  token nuevo ya lleva el rol actual; si se ha borrado, desactivado o archivado, responde 401.
+
+### Usuarios activos (prehook)
+
+Un admin puede desactivar a un usuario (`active: false`) o archivarlo (`deleted: true`). Ninguno de los dos
+tiene que poder entrar. En lugar de filtrar en cada consulta, el modelo `User` tiene un **prehook de
+Mongoose**: una función que se ejecuta antes de cada consulta de usuarios y le añade el filtro
+`{ active: true, deleted: false }`:
+
+```ts
+UserSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {
+    if (this.getOptions().withInactive) {
+        return;
+    }
+
+    this.where({ active: true, deleted: false });
+});
+```
+
+Como el login busca al usuario por email, a un usuario inactivo o archivado no lo encuentra y responde 401
+con el mismo mensaje de siempre. Lo mismo al renovar el token. Las rutas del admin sí necesitan verlos
+a todos, y se saltan el filtro con `.setOptions({ withInactive: true })`.
 
 Para probarlo con curl:
 
