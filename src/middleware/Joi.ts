@@ -66,14 +66,14 @@ export const Schemas = {
         register: Joi.object<IUser>({
             name: Joi.string().trim().required().example('Ana'),
             email: Joi.string().email().required().example('ana@example.com'),
-            password: Joi.string().min(8).required().example('seminari7')
+            password: Joi.string().min(8).required().example('studate26')
         }),
 
         // Login: el email y la contraseña. Aqui no se comprueba la longitud de la contraseña:
         // si es incorrecta, el servidor responde 401 igualmente
         login: Joi.object<IUser>({
             email: Joi.string().email().required().example('admin@example.com'),
-            password: Joi.string().required().example('seminari7')
+            password: Joi.string().required().example('studate26')
         })
 
         // Refresh y logout no tienen esquema: no llevan body, el refresh token va en una cookie

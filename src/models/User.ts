@@ -3,6 +3,11 @@ import mongoose, { Document, Schema } from 'mongoose';
 import Logging from '../library/Logging';
 import { hashPassword } from '../utils/password';
 
+// Tamaño maximo de la foto de perfil (en caracteres). La foto se guarda dentro del propio usuario como
+// texto en base64 ("data:image/jpeg;base64,..."). El frontend la reduce antes de enviarla, asi que una foto
+// normal ocupa unos 30 KB; con este limite nadie puede llenar la base de datos subiendo fotos enormes.
+export const PHOTO_MAX_LENGTH = 200_000;
+
 // Roles que puede tener un usuario.
 // admin entra en el backoffice; user es el usuario normal de la app.
 export const USER_ROLES = ['user', 'admin'] as const;
@@ -18,6 +23,34 @@ export interface IUser {
     password: string;
 
     role: UserRole;
+
+    // ---- Perfil: lo que se ve de un estudiante en Studate ----
+
+    // Fecha de nacimiento: con ella se calcula la edad
+    birthDate?: Date;
+
+    // Titulación que estudia, por ejemplo "Grau en Enginyeria Telemàtica"
+    degree?: string;
+
+    // El "Qué busco" del perfil, por ejemplo "Alguien con quien estudiar"
+    lookingFor?: string;
+
+    // Unas líneas para presentarse
+    bio?: string;
+
+    // Foto de perfil en base64 (ver PHOTO_MAX_LENGTH)
+    photo?: string;
+
+    // ---- Estado de la cuenta ----
+
+    // Un admin puede desactivar a un usuario: un usuario inactivo no puede iniciar sesion ni usar la API
+    active: boolean;
+
+    // Marca si el usuario esta archivado (borrado logico). Un usuario archivado no se elimina de la base
+    // de datos: se puede restaurar. Eliminarlo para siempre es otra operacion (borrado fisico)
+    deleted: boolean;
+
+    deletedAt?: Date;
 }
 
 // ---- Interfaces de la autenticacion con JWT ----
@@ -61,7 +94,28 @@ const UserSchema: Schema = new Schema(
         password: { type: String, required: true, select: false },
 
         // Si no se indica, un usuario nuevo es user. Los admin se crean con el seed
-        role: { type: String, enum: USER_ROLES, default: 'user' }
+        role: { type: String, enum: USER_ROLES, default: 'user' },
+
+        // Los datos del perfil son opcionales: al registrarse solo se piden nombre, email y contraseña
+        birthDate: { type: Date },
+
+        degree: { type: String, trim: true },
+
+        lookingFor: { type: String, trim: true, maxlength: 100 },
+
+        bio: { type: String, trim: true, maxlength: 500 },
+
+        photo: { type: String, maxlength: PHOTO_MAX_LENGTH },
+
+        // Por defecto un usuario esta activo
+        active: { type: Boolean, default: true },
+
+        // Borrado logico, igual que hacian autores y libros en el seminario.
+        // Ojo: aqui el email sigue siendo unico entre todos los usuarios, tambien los archivados
+        // (no hay indice parcial). Asi, al restaurar un usuario su email nunca choca con el de otro.
+        deleted: { type: Boolean, default: false },
+
+        deletedAt: { type: Date }
     },
     {
         // Mongoose crea automaticamente las fechas de creacion y actualizacion

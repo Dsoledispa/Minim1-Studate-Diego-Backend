@@ -22,9 +22,23 @@ const storedFields = {
 
 const { password: _password, ...userFields } = registerInput.properties;
 
+// El usuario tal como lo devuelve la API: los datos del registro (sin contraseña), el rol, el perfil
+// y el estado de la cuenta (activo y archivado)
 const userSchema = {
     type: 'object',
-    properties: { ...storedFields, ...userFields, role: { type: 'string', enum: ['user', 'admin'] } }
+    properties: {
+        ...storedFields,
+        ...userFields,
+        role: { type: 'string', enum: ['user', 'admin'] },
+        birthDate: { type: 'string', format: 'date-time' },
+        degree: { type: 'string' },
+        lookingFor: { type: 'string', maxLength: 100 },
+        bio: { type: 'string', maxLength: 500 },
+        photo: { type: 'string', description: 'Foto en base64 (data:image/jpeg;base64,...)' },
+        active: { type: 'boolean' },
+        deleted: { type: 'boolean', description: 'true si el usuario está archivado' },
+        deletedAt: { type: 'string', format: 'date-time' }
+    }
 };
 
 // Una respuesta correcta: el esquema de lo que se devuelve y un ejemplo con datos de verdad
@@ -48,12 +62,18 @@ const errorResponse = (description: string, message: string) => ({
 });
 
 const userExample = {
-    _id: '6ab3f2fe9c500204a7d5f8a1',
-    name: 'Admin',
-    email: 'admin@example.com',
-    role: 'admin',
-    createdAt: '2026-10-05T10:00:00.000Z',
-    updatedAt: '2026-10-05T10:00:00.000Z'
+    _id: '6ab3f2fe9c500204a7d5f8a3',
+    name: 'Laia Puig',
+    email: 'laia@example.com',
+    role: 'user',
+    birthDate: '2003-02-20T00:00:00.000Z',
+    degree: 'Grau en Enginyeria Telemàtica',
+    lookingFor: 'Tomar algo después de clase',
+    bio: 'Siempre en la biblioteca de la EETAC, casi siempre con café.',
+    active: true,
+    deleted: false,
+    createdAt: '2026-11-03T10:00:00.000Z',
+    updatedAt: '2026-11-03T10:00:00.000Z'
 };
 
 const swaggerPath = (filePath: string) => filePath.replace(/\\/g, '/');

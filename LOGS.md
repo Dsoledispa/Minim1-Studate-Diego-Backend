@@ -40,7 +40,7 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
 
 #### Usuarios (`users`)
 
-- [ ] Modelo User ampliado (perfil, activo, archivado) y datos de ejemplo · Diego
+- [x] Modelo User ampliado (perfil, activo, archivado) y datos de ejemplo · Diego
 - [ ] Prehook de Mongoose "está activo" · Diego
 - [ ] Gestión de usuarios: listado paginado, búsqueda, editar y cambiar rol · Diego
 - [ ] Archivar, restaurar y eliminar para siempre (usuarios) · Diego
@@ -101,3 +101,24 @@ La bitácora del Seminario 7, de donde viene este código, se conserva en el tag
   arrancada, 8 pruebas con curl: login 200, `/users/me` 200 con token y 401 sin él, `/authors`, `/books` y `GET /users`
   404, `/api-docs` y `/ping` 200, y el documento de Swagger ya no tiene ninguna ruta ni esquema de autores o libros.
 - Prompt de IA usado: el mismo de la limpieza del repositorio (ver la entrada anterior).
+
+### 2026-11-03 · Modelo User ampliado y datos de ejemplo
+
+- `User` pasa de `name`, `email`, `password` y `role` a tener también:
+  - Perfil (opcional, como en el blog): `birthDate`, `degree` (titulación), `lookingFor` ("Qué busco", 100
+    caracteres como mucho), `bio` (500 como mucho) y `photo`.
+  - Estado de la cuenta: `active` (`true` por defecto) y el borrado lógico `deleted` + `deletedAt`, con los mismos
+    nombres que usaban autores y libros en el seminario.
+- Decisión: el email sigue siendo único entre **todos** los usuarios, también los archivados (índice único normal,
+  no parcial como el de autores). Así restaurar un usuario nunca choca con otro que se haya quedado su email.
+- Decisión: la foto se guarda dentro del usuario como texto en base64, con un máximo de 200 000 caracteres
+  (`PHOTO_MAX_LENGTH`). No hace falta guardar ficheros ni otra librería; el frontend la reduce antes de enviarla.
+- Seed: 14 usuarios con perfiles de estudiantes de la EETAC (inventados), contraseña `studate26`. Dos están
+  inactivos (`aina`, `iker`) y dos archivados (`sara`, `dani`), para probar las tareas siguientes.
+- Swagger: el esquema `User` y su ejemplo llevan los campos nuevos. README: usuarios de ejemplo y campos del usuario.
+- Validación ejecutada: `npm run build` y `npm run lint` sin errores; `npm run seed -- --reset` crea 14 usuarios, y
+  con `mongosh` se comprueba que hay 2 con `active: false`, 2 con `deleted: true` y las 14 contraseñas cifradas
+  (`scrypt:...`). Con la API arrancada, el login de `laia@example.com` devuelve el usuario con los campos nuevos y sin
+  contraseña. Todavía un usuario inactivo puede iniciar sesión: lo resuelve el prehook (siguiente tarea).
+- Prompt de IA usado: «Empezamos por el modelo User. Antes de tocar nada, dime qué campos tendría, cómo quedaría la
+  estructura del modelo, y ponme ejemplos de cada campo para ver qué necesitamos de verdad.»

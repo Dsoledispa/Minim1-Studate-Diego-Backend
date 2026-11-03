@@ -99,15 +99,17 @@ del proyecto.
 ## Llenar la base de datos (la primera vez)
 
 Si arrancas con la base de datos vacía, la API funciona pero no devuelve nada y no hay ningún usuario
-con el que iniciar sesión. Para tener datos con los que probar, hay usuarios de ejemplo en
-`src/seed-data.ts`:
+con el que iniciar sesión. Para tener datos con los que probar, hay 14 usuarios de ejemplo en
+`src/seed-data.ts`: un admin, un usuario normal y doce estudiantes con su perfil. De los estudiantes,
+dos están inactivos y dos archivados, para poder probar el prehook de activos y el borrado lógico:
 
 ```
 npm run seed
 ```
 
 Este comando solo inserta los datos si la base de datos está vacía. Si ya tienes datos de pruebas
-anteriores, o vienen de una versión antigua de los modelos, hay que borrarlos y volver a crearlos:
+anteriores, o vienen de una versión antigua de los modelos (por ejemplo, los usuarios de antes de tener
+perfil), hay que borrarlos y volver a crearlos:
 
 ```
 npm run seed -- --reset
@@ -115,12 +117,14 @@ npm run seed -- --reset
 
 Siempre trabaja sobre la base de datos de tu `.env`.
 
-Los usuarios de ejemplo son:
+Todos tienen la contraseña `studate26`. Los que más se usan para probar:
 
-| Email | Contraseña | Rol |
+| Email | Rol | Para qué |
 |---|---|---|
-| `admin@example.com` | `seminari7` | `admin`: puede usar el backoffice |
-| `user@example.com` | `seminari7` | `user`: puede iniciar sesión, pero no entrar en el backoffice |
+| `admin@example.com` | `admin` | Entrar en el backoffice |
+| `user@example.com` | `user` | Un usuario normal: puede iniciar sesión, pero no entrar en el backoffice |
+| `aina@example.com`, `iker@example.com` | `user` | Inactivos |
+| `sara@example.com`, `dani@example.com` | `user` | Archivados |
 
 Las contraseñas están escritas a la vista en `src/seed-data.ts`. Es un proyecto de clase: son públicas
 a propósito, para que cualquiera que clone el repositorio pueda entrar con cualquier usuario. En la
@@ -244,7 +248,7 @@ Decisiones y límites, porque es un proyecto de clase:
 Para probarlo con curl:
 
 ```
-curl -c cookies.txt -X POST http://localhost:1337/auth/login -H "Content-Type: application/json" -d '{"email":"admin@example.com","password":"seminari7"}'
+curl -c cookies.txt -X POST http://localhost:1337/auth/login -H "Content-Type: application/json" -d '{"email":"admin@example.com","password":"studate26"}'
 curl http://localhost:1337/users/me -H "Authorization: Bearer <el token de la respuesta anterior>"
 curl -b cookies.txt -X POST http://localhost:1337/auth/refresh
 ```
@@ -264,6 +268,12 @@ Todas las rutas salvo `/auth/*` y `/ping` necesitan la cabecera `Authorization: 
 | POST | `/auth/refresh` | Devuelve un access token nuevo: `{ token }`. Lee el refresh token de la cookie | |
 | POST | `/auth/logout` | Borra la cookie del refresh token (204) | |
 | GET | `/users/me` | Devuelve el usuario con sesión (`_id`, `name`, `email`, `role`). Lo saca de `req.user` | |
+Un usuario tiene `name`, `email` y `role` (`user` o `admin`), los datos de su perfil (`birthDate`,
+`degree` o titulación, `lookingFor` o "Qué busco", `bio` y `photo`) y el estado de su cuenta: `active`
+(si un admin lo ha desactivado) y `deleted` con `deletedAt` (si está archivado). La contraseña nunca se
+devuelve. La foto se guarda dentro del propio usuario como texto en base64 (`data:image/jpeg;base64,...`),
+con un máximo de 200 000 caracteres: es lo más sencillo para el proyecto y no necesita guardar ficheros.
+
 Ejemplo con curl (también sirve Postman o Thunder Client):
 
 ```
