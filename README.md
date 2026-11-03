@@ -99,15 +99,17 @@ del proyecto.
 ## Llenar la base de datos (la primera vez)
 
 Si arrancas con la base de datos vacía, la API funciona pero no devuelve nada y no hay ningún usuario
-con el que iniciar sesión. Para tener datos con los que probar, hay usuarios de ejemplo en
-`src/seed-data.ts`:
+con el que iniciar sesión. Para tener datos con los que probar, hay 14 usuarios de ejemplo en
+`src/seed-data.ts`: un admin, un usuario normal y doce estudiantes con su perfil. De los estudiantes,
+dos están inactivos y dos archivados, para poder probar el prehook de activos y el borrado lógico:
 
 ```
 npm run seed
 ```
 
 Este comando solo inserta los datos si la base de datos está vacía. Si ya tienes datos de pruebas
-anteriores, o vienen de una versión antigua de los modelos, hay que borrarlos y volver a crearlos:
+anteriores, o vienen de una versión antigua de los modelos (por ejemplo, los usuarios de antes de tener
+perfil), hay que borrarlos y volver a crearlos:
 
 ```
 npm run seed -- --reset
@@ -115,12 +117,14 @@ npm run seed -- --reset
 
 Siempre trabaja sobre la base de datos de tu `.env`.
 
-Los usuarios de ejemplo son:
+Todos tienen la contraseña `studate26`. Los que más se usan para probar:
 
-| Email | Contraseña | Rol |
+| Email | Rol | Para qué |
 |---|---|---|
-| `admin@example.com` | `seminari7` | `admin`: puede usar el backoffice |
-| `user@example.com` | `seminari7` | `user`: puede iniciar sesión, pero no entrar en el backoffice |
+| `admin@example.com` | `admin` | Entrar en el backoffice |
+| `user@example.com` | `user` | Un usuario normal: puede iniciar sesión, pero no entrar en el backoffice |
+| `aina@example.com`, `iker@example.com` | `user` | Inactivos |
+| `sara@example.com`, `dani@example.com` | `user` | Archivados |
 
 Las contraseñas están escritas a la vista en `src/seed-data.ts`. Es un proyecto de clase: son públicas
 a propósito, para que cualquiera que clone el repositorio pueda entrar con cualquier usuario. En la
@@ -185,8 +189,9 @@ El recorrido completo:
    registrados). El refresh token no va en el JSON: se deja en una **cookie HttpOnly** (ver más abajo).
 3. En cada petición a una ruta protegida, el cliente envía el token en la cabecera:
    `Authorization: Bearer <token>`.
-4. El middleware `VerifyToken` comprueba la firma y la caducidad, y deja el usuario en `req.user`.
-   Si falta el token, ha caducado o no es válido, responde 401.
+4. El middleware `VerifyToken` comprueba la firma y la caducidad, y que el usuario siga activo, y deja el
+   usuario en `req.user`. Si falta el token, ha caducado, no es válido o la cuenta ya no está activa,
+   responde 401.
 5. El middleware `RequireRole('admin')` comprueba el rol: si el usuario no es `admin`, responde 403.
 6. El access token dura poco (15 minutos). Cuando caduca, el cliente llama a `POST /auth/refresh`
    sin body: el navegador adjunta la cookie y la API responde `{ token }`, un access token nuevo, sin
@@ -230,6 +235,7 @@ si su petición estaba bien formada.
 | `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout` | Cualquiera (refresh necesita la cookie con un refresh token válido) |
 | `/ping`, `/api-docs` | Cualquiera |
 | `/users/me` | Cualquier usuario con sesión |
+| `/users`, `/users/:userId`, `/users/:userId/archive`, `/users/:userId/restore` (gestión de usuarios) | Solo `admin` |
 
 Decisiones y límites, porque es un proyecto de clase:
 
@@ -239,12 +245,39 @@ Decisiones y límites, porque es un proyecto de clase:
   el servidor no puede invalidar un refresh token antes de que caduque, y cerrar sesión consiste en
   borrar la cookie (`/auth/logout`) y que el frontend olvide el access token que tiene en memoria.
 - Al renovar, el servidor vuelve a leer el usuario de la base de datos: si le han cambiado el rol, el
-  token nuevo ya lleva el rol actual; si se ha borrado, responde 401.
+  token nuevo ya lleva el rol actual; si se ha borrado, desactivado o archivado, responde 401.
+
+### Usuarios activos (prehook)
+
+Un admin puede desactivar a un usuario (`active: false`) o archivarlo (`deleted: true`). Ninguno de los dos
+tiene que poder entrar. En lugar de filtrar en cada consulta, el modelo `User` tiene un **prehook de
+Mongoose**: una función que se ejecuta antes de cada consulta de usuarios y le añade el filtro
+`{ active: true, deleted: false }`:
+
+```ts
+UserSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {
+    if (this.getOptions().withInactive) {
+        return;
+    }
+
+    this.where({ active: true, deleted: false });
+});
+```
+
+Como el login busca al usuario por email, a un usuario inactivo o archivado no lo encuentra y responde 401
+con el mismo mensaje de siempre. Lo mismo al renovar el token. Las rutas del admin sí necesitan verlos
+a todos, y se saltan el filtro con `.setOptions({ withInactive: true })`.
+
+¿Y si el usuario ya tenía sesión cuando lo desactivan? Su access token sigue siendo válido hasta 15
+minutos. Para que no pueda seguir usando la API, `VerifyToken` busca en cada petición al usuario del token
+(pasando por el prehook) y, si ya no está activo, responde 401 "Tu cuenta no está activa". El frontend,
+con cualquier 401 que no sea de token caducado, cierra la sesión y lleva al login. Cuesta una consulta a
+MongoDB por petición, que para este proyecto no es un problema.
 
 Para probarlo con curl:
 
 ```
-curl -c cookies.txt -X POST http://localhost:1337/auth/login -H "Content-Type: application/json" -d '{"email":"admin@example.com","password":"seminari7"}'
+curl -c cookies.txt -X POST http://localhost:1337/auth/login -H "Content-Type: application/json" -d '{"email":"admin@example.com","password":"studate26"}'
 curl http://localhost:1337/users/me -H "Authorization: Bearer <el token de la respuesta anterior>"
 curl -b cookies.txt -X POST http://localhost:1337/auth/refresh
 ```
@@ -264,11 +297,30 @@ Todas las rutas salvo `/auth/*` y `/ping` necesitan la cabecera `Authorization: 
 | POST | `/auth/refresh` | Devuelve un access token nuevo: `{ token }`. Lee el refresh token de la cookie | |
 | POST | `/auth/logout` | Borra la cookie del refresh token (204) | |
 | GET | `/users/me` | Devuelve el usuario con sesión (`_id`, `name`, `email`, `role`). Lo saca de `req.user` | |
+| GET | `/users` | Lista los usuarios, paginados (`?page=&limit=&search=&role=&active=&degree=&archived=`). Solo admin | |
+| GET | `/users/:userId` | Devuelve un usuario, también si está inactivo o archivado. Solo admin | |
+| POST | `/users` | Crea un usuario con su rol y si está activo. Solo admin | `{ "name": "...", "email": "...", "password": "...", "role": "user" }` |
+| PUT | `/users/:userId` | Edita un usuario, su rol y si está activo (no la contraseña). Solo admin | `{ "name": "...", "email": "...", "role": "user", "active": true }` |
+| POST | `/users/:userId/archive` | Archiva un usuario (borrado lógico). Solo admin | |
+| POST | `/users/:userId/restore` | Restaura un usuario archivado. Solo admin | |
+| DELETE | `/users/:userId` | Elimina para siempre un usuario archivado (borrado físico). Solo admin | |
+Un usuario tiene `name`, `email` y `role` (`user` o `admin`), los datos de su perfil (`birthDate`,
+`degree` o titulación, `lookingFor` o "Qué busco", `bio` y `photo`) y el estado de su cuenta: `active`
+(si un admin lo ha desactivado) y `deleted` con `deletedAt` (si está archivado). La contraseña nunca se
+devuelve. La foto se guarda dentro del propio usuario como texto en base64 (`data:image/jpeg;base64,...`),
+con un máximo de 200 000 caracteres: es lo más sencillo para el proyecto y no necesita guardar ficheros.
+
 Ejemplo con curl (también sirve Postman o Thunder Client):
 
 ```
 curl http://localhost:1337/users/me -H "Authorization: Bearer <token>"
 ```
+
+En el listado de usuarios, `search` busca en el nombre y el email sin distinguir mayúsculas; `role` deja
+solo los de un rol; `active=true` o `active=false`, solo los activos o los inactivos; `degree`, solo los de una titulación
+(el texto entero); y `archived=true`,
+solo los archivados (por defecto no salen). Un admin no puede cambiarse su propio rol ni desactivarse:
+responde 403 "No puedes hacer esto con tu propio usuario", para que el backoffice no se quede sin admin.
 
 Códigos de respuesta: 201 al crear, 200 al leer o modificar, 204 al borrar, 400 si el id de la URL
 no tiene forma de id de MongoDB, 401 si falta el token o no es válido, 403 si el usuario no tiene el
@@ -277,9 +329,25 @@ válido y 500 si falla algo en el servidor.
 
 ## Borrado lógico y borrado físico
 
-Los usuarios no se borran de golpe: primero se **archivan** (borrado lógico, `deleted: true`) y se
-pueden restaurar; solo un usuario archivado se puede **eliminar para siempre** (borrado físico). Se
-implementa en la rama `users` y se explica aquí cuando esté hecho.
+Hay dos formas de "borrar" un usuario, y en el backoffice se usan en este orden:
+
+1. **Archivar** (borrado lógico, *soft delete*): `POST /users/:userId/archive`. El usuario **no se elimina**
+   de MongoDB: se marca con `deleted: true` y la fecha en `deletedAt`. A partir de ahí:
+   - no sale en el listado (sí con `?archived=true`);
+   - no puede iniciar sesión ni renovar el token (lo hace el [prehook](#usuarios-activos-prehook));
+   - no se puede editar (404) hasta que se restaure;
+   - su email sigue ocupado, así que al restaurarlo nunca choca con otro usuario.
+2. **Restaurar**: `POST /users/:userId/restore` deshace el archivado (`deleted: false` y se quita `deletedAt`).
+3. **Eliminar para siempre** (borrado físico, *hard delete*): `DELETE /users/:userId`. El documento
+   desaparece de MongoDB y no se puede deshacer. Solo se puede con un usuario **archivado**; si no, la API
+   responde 409 "Archiva el usuario antes de eliminarlo".
+
+¿Por qué en dos pasos? El borrado lógico es lo normal en una aplicación real: un error se arregla
+restaurando y no se pierden datos. El borrado físico existe para cuando de verdad hay que quitar los datos
+de alguien (por ejemplo, si lo pide el propio usuario), y obligar a archivar antes evita borrar a alguien
+por error con un solo clic.
+
+Un admin no puede archivarse ni eliminarse a sí mismo (403).
 
 ## Documentación de la API
 

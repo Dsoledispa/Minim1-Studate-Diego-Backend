@@ -26,6 +26,23 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
 - **Errores de autenticación**: 401 si falta el token, ha caducado (`{ message: 'El token ha caducado' }`) o no es válido (`{ message: 'Token no válido' }`); 403 si hay sesión pero no el rol
   necesario.
 - **Usuario con sesión**: `GET /users/me` (con sesión, cualquier rol) responde `{ user: { _id, name, email, role } }`, a partir del token (`req.user`).
+- **Usuario**: `{ _id, name, email, role, birthDate?, degree?, lookingFor?, bio?, photo?, active, deleted, deletedAt?, createdAt, updatedAt }`, nunca con
+  contraseña. `photo` es una imagen PNG o JPG en base64 (`data:image/...;base64,...`, 200 000 caracteres como mucho).
+- **Usuarios inactivos y archivados**: no pueden iniciar sesión ni renovar el token (401 con el mensaje de siempre). Lo hace el prehook del modelo.
+  Si ya tenían sesión, cualquier petición con su token responde 401 `{ message: 'Tu cuenta no está activa' }` y el frontend cierra la sesión.
+- **Gestión de usuarios** (solo `admin`):
+  - `GET /users?page=&limit=&search=&role=&active=&degree=&archived=` responde `{ users, total, page, pages }`, ordenados por nombre. `search` busca en
+    nombre y email; `role` es `user` o `admin`; `active` es `true` o `false`; `degree` es una titulación entera; `archived=true` lista solo los
+    archivados (por defecto no salen). 400 si un filtro no es válido.
+  - `GET /users/:userId` responde `{ user }`, también si está inactivo o archivado; 404 si no existe.
+  - `POST /users` con `{ name, email, password, role?, active?, birthDate?, degree?, lookingFor?, bio?, photo? }` responde 201 `{ user }`; 409 si el
+    email existe, 422 si el cuerpo no vale.
+  - `PUT /users/:userId` con lo mismo salvo `password` (`name` y `email` obligatorios) responde 200 `{ user }`; 404 si no existe o está archivado.
+    `photo: ''` quita la foto.
+  - `POST /users/:userId/archive` (borrado lógico) responde 200 `{ user }` con `deleted: true`; 404 si no existe o ya estaba archivado.
+  - `POST /users/:userId/restore` responde 200 `{ user }`; 404 si no existe o no estaba archivado.
+  - `DELETE /users/:userId` (borrado físico) responde 204. Solo con usuarios archivados: si no, 409 `{ message: 'Archiva el usuario antes de eliminarlo' }`.
+  - Un admin no puede cambiarse su propio rol, desactivarse, archivarse ni eliminarse: 403 `{ message: 'No puedes hacer esto con tu propio usuario' }`.
 
 ## Tareas
 
@@ -40,10 +57,10 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
 
 #### Usuarios (`users`)
 
-- [ ] Modelo User ampliado (perfil, activo, archivado) y datos de ejemplo · Diego
-- [ ] Prehook de Mongoose "está activo" · Diego
-- [ ] Gestión de usuarios: listado paginado, búsqueda, editar y cambiar rol · Diego
-- [ ] Archivar, restaurar y eliminar para siempre (usuarios) · Diego
+- [x] Modelo User ampliado (perfil, activo, archivado) y datos de ejemplo · Diego
+- [x] Prehook de Mongoose "está activo" · Diego
+- [x] Gestión de usuarios: listado paginado, búsqueda, editar y cambiar rol · Diego
+- [x] Archivar, restaurar y eliminar para siempre (usuarios) · Diego
 
 #### La Orla (`grades`)
 
@@ -101,3 +118,122 @@ La bitácora del Seminario 7, de donde viene este código, se conserva en el tag
   arrancada, 8 pruebas con curl: login 200, `/users/me` 200 con token y 401 sin él, `/authors`, `/books` y `GET /users`
   404, `/api-docs` y `/ping` 200, y el documento de Swagger ya no tiene ninguna ruta ni esquema de autores o libros.
 - Prompt de IA usado: el mismo de la limpieza del repositorio (ver la entrada anterior).
+
+### 2026-11-03 · Modelo User ampliado y datos de ejemplo
+
+- `User` pasa de `name`, `email`, `password` y `role` a tener también:
+  - Perfil (opcional, como en el blog): `birthDate`, `degree` (titulación), `lookingFor` ("Qué busco", 100
+    caracteres como mucho), `bio` (500 como mucho) y `photo`.
+  - Estado de la cuenta: `active` (`true` por defecto) y el borrado lógico `deleted` + `deletedAt`, con los mismos
+    nombres que usaban autores y libros en el seminario.
+- Decisión: el email sigue siendo único entre **todos** los usuarios, también los archivados (índice único normal,
+  no parcial como el de autores). Así restaurar un usuario nunca choca con otro que se haya quedado su email.
+- Decisión: la foto se guarda dentro del usuario como texto en base64, con un máximo de 200 000 caracteres
+  (`PHOTO_MAX_LENGTH`). No hace falta guardar ficheros ni otra librería; el frontend la reduce antes de enviarla.
+- Seed: 14 usuarios con perfiles de estudiantes de la EETAC (inventados), contraseña `studate26`. Dos están
+  inactivos (`aina`, `iker`) y dos archivados (`sara`, `dani`), para probar las tareas siguientes.
+- Swagger: el esquema `User` y su ejemplo llevan los campos nuevos. README: usuarios de ejemplo y campos del usuario.
+- Validación ejecutada: `npm run build` y `npm run lint` sin errores; `npm run seed -- --reset` crea 14 usuarios, y
+  con `mongosh` se comprueba que hay 2 con `active: false`, 2 con `deleted: true` y las 14 contraseñas cifradas
+  (`scrypt:...`). Con la API arrancada, el login de `laia@example.com` devuelve el usuario con los campos nuevos y sin
+  contraseña. Todavía un usuario inactivo puede iniciar sesión: lo resuelve el prehook (siguiente tarea).
+- Prompt de IA usado: «Empezamos por el modelo User. Antes de tocar nada, dime qué campos tendría, cómo quedaría la
+  estructura del modelo, y ponme ejemplos de cada campo para ver qué necesitamos de verdad.»
+
+### 2026-11-03 · Prehook de Mongoose "está activo"
+
+- Qué pide la tarea: que un usuario desactivado no pueda usar la aplicación, resuelto con un hook de Mongoose en
+  lugar de repetir el filtro en cada consulta.
+- `UserSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], ...)` añade
+  `{ active: true, deleted: false }` a todas las consultas de usuarios. `findById` también queda filtrado, porque
+  por dentro es un `findOne`. Se incluyen los archivados porque tampoco tienen que poder entrar.
+- Para que el admin pueda ver y reactivar a todos, la consulta se salta el filtro con la opción propia
+  `.setOptions({ withInactive: true })`, que el hook lee con `this.getOptions()`.
+- Qué cambia sin tocar los services: el login (que busca por email) no encuentra al usuario inactivo o archivado
+  y responde 401 con el mismo mensaje de siempre; el refresh (`findById`) también responde 401.
+- Validación ejecutada: `npm run build` y `npm run lint` sin errores. Con un script de prueba con `tsx` (fuera del
+  repositorio): `User.countDocuments()` da 10 y con `withInactive` da 14; `find()` igual; `findOne` de la usuaria
+  inactiva da `null` y con `withInactive` la encuentra. Con la API arrancada, 6 logins: `laia` y `admin` 200; los
+  inactivos `aina` e `iker` y los archivados `sara` y `dani`, 401 "Email o contraseña incorrectos".
+- Prompt de IA usado: «Ahora el prehook de Mongoose de "está activo". No me acuerdo bien de en qué consistía.
+  Explícame de qué va, por qué tiene sentido esta tarea, y dame el plan de acción.»
+
+### 2026-11-03 · Gestión de usuarios: listado paginado, búsqueda, editar y cambiar rol
+
+- Rutas de admin en `routes/Users.ts`, cada una con su cadena `VerifyToken` → `RequireRole('admin')` → validación →
+  controller y su comentario de Swagger: `GET /users` (con filtros), `GET /users/:userId`, `POST /users` y `PUT /users/:userId`.
+  `/me` va antes que `/:userId` para que Express no tome "me" por un id.
+- El listado copia la forma de la paginación de libros del seminario (`skip`, `limit` y `countDocuments` con el mismo filtro,
+  respuesta `{ users, total, page, pages }`) y le añade los filtros `role`, `active` y `archived`. Se validan con un esquema
+  de Joi nuevo (`userList`) y el middleware `ValidateUserList`, que es igual que `ValidatePagination`: Joi convierte
+  `"false"` de la URL en `false`.
+- Las funciones del admin se saltan el prehook con `setOptions({ withInactive: true })`: si no, el admin no vería a los
+  inactivos ni a los archivados.
+- Joi: `user.create` y `user.update` comparten los campos del perfil (escritos una sola vez). La contraseña no está en
+  `update`, así que enviarla da 422. La foto tiene que empezar por `data:image/png;base64,` o `data:image/jpeg;base64,`.
+- Decisiones:
+  - Un usuario archivado no se puede editar (404): primero hay que restaurarlo.
+  - Un admin no puede cambiarse su propio rol ni desactivarse: 403 "No puedes hacer esto con tu propio usuario". Si se
+    pudiera, el backoffice se podría quedar sin ningún admin.
+- Contrato de la gestión de usuarios escrito arriba (y copiado al LOGS.md del frontend en su rama).
+- Validación ejecutada: `npm run build` y `npm run lint` sin errores. Con la API arrancada y el seed recién hecho, 30 pruebas con
+  curl, todas correctas: listado por defecto (12 no archivados, 3 páginas de 5, sin contraseñas), `limit=10&page=2`, búsqueda por
+  nombre y por email, `role=admin`, `active=false` (Aina e Iker), `archived=true` (Sara y Dani), 400 con `page=0` y con un rol que
+  no existe; GET de una inactiva y de una archivada (200), de un id inexistente (404) y mal formado (400); POST correcto (201, sin
+  contraseña en la respuesta), con email repetido (409), sin contraseña (422) y con una foto que no es imagen (422); PUT cambiando
+  el rol, reactivando a Aina (y después su login da 200), a una archivada (404), con contraseña (422), el admin quitándose el rol
+  o desactivándose (403) y editando su nombre (200); como `user`, 403 en listado, detalle y creación; sin token, 401.
+- Prompt de IA usado: «Siguiente: gestión de usuarios, listado paginado, búsqueda, editar y cambiar rol. Hay que montar esta
+  funcionalidad. ¿Cómo lo harías? ¿Cuál sería el plan de acción?»
+
+### 2026-11-03 · Archivar, restaurar y eliminar para siempre
+
+- Soft delete y hard delete, como se explicó en clase: el borrado normal es lógico (archivar) y se puede deshacer; el
+  borrado físico existe, pero solo para usuarios ya archivados.
+- `POST /users/:userId/archive` pone `deleted: true` y `deletedAt`, igual que hacía `deleteBook` en el seminario.
+  `POST /users/:userId/restore` lo deshace (con `$unset` se quita `deletedAt`). Los dos usan `findOneAndUpdate` con
+  `deleted` en el filtro, así que archivar dos veces o restaurar uno que no está archivado da 404.
+- `DELETE /users/:userId` borra el documento con `deleteOne`. El service devuelve qué ha pasado (`'deleted'`,
+  `'not-found'` o `'not-archived'`) y el controller elige el código: 204, 404 o 409. Se ha elegido así para que el
+  service no sepa nada de HTTP, como el resto de services.
+- Un admin no puede archivarse ni eliminarse a sí mismo (403, el mismo mensaje que en la edición).
+- Queda apuntado en `deleteUser` que, cuando existan los votos de La Orla y los Dates, también habrá que borrar los del usuario.
+- README: sección "Borrado lógico y borrado físico" con el porqué de los dos pasos. Swagger: las tres rutas y la respuesta `NotArchived`.
+- Validación ejecutada: `npm run build` y `npm run lint` sin errores. Con el seed recién hecho, 18 pruebas con curl, todas correctas:
+  archivar a Laia (200, con `deleted` y `deletedAt`), ya no sale en el listado y sí en `archived=true`, su login da 401, archivarla
+  otra vez 404, restaurarla (200, sin `deletedAt`) y su login vuelve a dar 200, restaurar una no archivada 404, `DELETE` sin
+  archivar 409, archivar y `DELETE` 204, después su GET y otro `DELETE` 404, el admin archivándose o eliminándose 403, un `user`
+  haciéndolo 403 e id mal formado 400. En MongoDB quedan 13 usuarios y ninguno con el email de Laia.
+- Pruebas del bloque `users`: además de las de cada tarea (6 logins del prehook, 30 de la gestión y estas 18), se repite todo
+  sobre una base de datos recién sembrada y sale igual.
+- Prompt de IA usado: «Ahora archivar, restaurar y eliminar para siempre usuarios. ¿Cómo lo harías? Y recuérdame cómo era esto del
+  soft delete y el hard delete [...] Dame el plan de acción.»
+
+### 2026-11-03 · Filtro por titulación en el listado de usuarios
+
+- Al montar la lista de usuarios del backoffice (frontend) propusimos filtrar por rol, estado, archivados y titulación, y el
+  último no existía en la API. Se vuelve a la rama `users` y se añade `degree` a `GET /users`: Joi lo valida (texto de 100
+  caracteres como mucho) y el service lo añade al filtro solo si viene. Tiene que coincidir entera, porque en el frontend se
+  elige de una lista.
+- Contrato, Swagger y README al día.
+- Validación ejecutada: `npm run build` y `npm run lint`; con curl, `degree=Grau en Enginyeria Aeroespacial` devuelve solo los
+  de Aeroespacial y combinado con `active=true` sigue funcionando.
+- Prompt de IA usado: «Empezamos por la lista de usuarios paginada con búsqueda y filtros [...] quiero 10 usuarios por página y
+  algunos filtros, los más típicos. ¿Qué filtros me sugieres?» (conversación del frontend).
+
+### 2026-11-03 · Un usuario desactivado deja de poder usar la API al momento
+
+- Al hacer el formulario de usuario (frontend) salió el problema: "si un usuario no está activo, no puede usar la API". El prehook solo
+  actuaba en el login y en el refresh; un usuario con sesión al que el admin desactivaba seguía usando la API con su access token hasta
+  que caducaba (15 minutos como mucho), que es justo el límite que se había dejado documentado. Se vuelve a la rama `users` para
+  arreglarlo.
+- `VerifyToken` pasa a ser `async` y, después de verificar el token, busca al usuario con `UserService.getUserById`. Como pasa por el
+  prehook, no encuentra a los inactivos ni a los archivados: en ese caso responde 401 "Tu cuenta no está activa". El interceptor del
+  frontend, con un 401 que no es de token caducado, ya cerraba la sesión y llevaba al login, así que allí no hay que tocar nada.
+- Decisión: el rol sigue saliendo del token (es lo que pide el enunciado: el rol en el payload del JWT); solo se mira en la base de datos
+  si la cuenta sigue activa.
+- Validación ejecutada: `npm run build` y `npm run lint`; con curl, Laia con su token: `/users/me` 200; el admin la desactiva y con el
+  mismo token responde 401 "Tu cuenta no está activa"; reactivada, 200 otra vez; archivada, 401; las rutas del admin siguen dando 200 y
+  sin token 401.
+- Prompt de IA usado: «Lo de activo es importante, porque todo lo que venga después tiene que saber si un usuario está activo o no: si
+  no lo está, no puede usar la API.» (conversación del formulario de usuario, en el frontend).
