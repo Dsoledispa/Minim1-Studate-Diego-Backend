@@ -62,6 +62,10 @@ router.get('/me', VerifyToken, controller.readMe);
  *         schema: { type: boolean }
  *         description: true para ver solo los activos, false para ver solo los inactivos
  *       - in: query
+ *         name: degree
+ *         schema: { type: string, maxLength: 100 }
+ *         description: Solo los de esta titulación (el texto entero, por ejemplo Grau en Enginyeria Telemàtica)
+ *       - in: query
  *         name: archived
  *         schema: { type: boolean, default: false }
  *         description: true para ver solo los archivados

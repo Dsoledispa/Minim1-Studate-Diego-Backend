@@ -290,7 +290,7 @@ Todas las rutas salvo `/auth/*` y `/ping` necesitan la cabecera `Authorization: 
 | POST | `/auth/refresh` | Devuelve un access token nuevo: `{ token }`. Lee el refresh token de la cookie | |
 | POST | `/auth/logout` | Borra la cookie del refresh token (204) | |
 | GET | `/users/me` | Devuelve el usuario con sesión (`_id`, `name`, `email`, `role`). Lo saca de `req.user` | |
-| GET | `/users` | Lista los usuarios, paginados (`?page=&limit=&search=&role=&active=&archived=`). Solo admin | |
+| GET | `/users` | Lista los usuarios, paginados (`?page=&limit=&search=&role=&active=&degree=&archived=`). Solo admin | |
 | GET | `/users/:userId` | Devuelve un usuario, también si está inactivo o archivado. Solo admin | |
 | POST | `/users` | Crea un usuario con su rol y si está activo. Solo admin | `{ "name": "...", "email": "...", "password": "...", "role": "user" }` |
 | PUT | `/users/:userId` | Edita un usuario, su rol y si está activo (no la contraseña). Solo admin | `{ "name": "...", "email": "...", "role": "user", "active": true }` |
@@ -310,7 +310,8 @@ curl http://localhost:1337/users/me -H "Authorization: Bearer <token>"
 ```
 
 En el listado de usuarios, `search` busca en el nombre y el email sin distinguir mayúsculas; `role` deja
-solo los de un rol; `active=true` o `active=false`, solo los activos o los inactivos; y `archived=true`,
+solo los de un rol; `active=true` o `active=false`, solo los activos o los inactivos; `degree`, solo los de una titulación
+(el texto entero); y `archived=true`,
 solo los archivados (por defecto no salen). Un admin no puede cambiarse su propio rol ni desactivarse:
 responde 403 "No puedes hacer esto con tu propio usuario", para que el backoffice no se quede sin admin.
 

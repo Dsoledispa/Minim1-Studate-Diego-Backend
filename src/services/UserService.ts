@@ -37,15 +37,16 @@ export const getUserById = async (userId: string): Promise<IUserProfile | null> 
 // ---- Gestion de usuarios del backoffice (solo admin) ----
 
 // Funcion que busca una pagina de usuarios con los filtros del backoffice
-export const getUsers = async ({ page, limit, search, role, active, archived }: UserListQuery) => {
+export const getUsers = async ({ page, limit, search, role, active, degree, archived }: UserListQuery) => {
     const searchRegex = search ? new RegExp(escapeRegExp(search), 'i') : undefined;
 
     // archived decide si se listan los archivados o los que no lo estan (deleted es el campo del modelo).
-    // role y active solo se añaden al filtro si vienen en la URL
+    // role, active y degree solo se añaden al filtro si vienen en la URL
     const filter = {
         deleted: archived,
         ...(role ? { role } : {}),
         ...(active !== undefined ? { active } : {}),
+        ...(degree ? { degree } : {}),
         ...(searchRegex ? { $or: [{ name: searchRegex }, { email: searchRegex }] } : {})
     };
 

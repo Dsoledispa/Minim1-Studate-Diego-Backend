@@ -15,6 +15,7 @@ export interface PaginationQuery {
 export interface UserListQuery extends PaginationQuery {
     role?: UserRole;
     active?: boolean;
+    degree?: string;
     archived: boolean;
 }
 
@@ -98,6 +99,9 @@ export const Schemas = {
 
         // Solo los activos (true) o solo los inactivos (false)
         active: Joi.boolean(),
+
+        // Solo los de una titulacion (tiene que coincidir entera)
+        degree: Joi.string().trim().max(100),
 
         // Por defecto se listan los usuarios no archivados; con archived=true, solo los archivados
         archived: Joi.boolean().default(false)

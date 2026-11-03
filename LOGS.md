@@ -30,9 +30,9 @@ Lo que backend y frontend tienen que cumplir igual. Si algo de aquí cambia, se 
   contraseña. `photo` es una imagen PNG o JPG en base64 (`data:image/...;base64,...`, 200 000 caracteres como mucho).
 - **Usuarios inactivos y archivados**: no pueden iniciar sesión ni renovar el token (401 con el mensaje de siempre). Lo hace el prehook del modelo.
 - **Gestión de usuarios** (solo `admin`):
-  - `GET /users?page=&limit=&search=&role=&active=&archived=` responde `{ users, total, page, pages }`, ordenados por nombre. `search` busca en nombre
-    y email; `role` es `user` o `admin`; `active` es `true` o `false`; `archived=true` lista solo los archivados (por defecto no salen). 400 si un
-    filtro no es válido.
+  - `GET /users?page=&limit=&search=&role=&active=&degree=&archived=` responde `{ users, total, page, pages }`, ordenados por nombre. `search` busca en
+    nombre y email; `role` es `user` o `admin`; `active` es `true` o `false`; `degree` es una titulación entera; `archived=true` lista solo los
+    archivados (por defecto no salen). 400 si un filtro no es válido.
   - `GET /users/:userId` responde `{ user }`, también si está inactivo o archivado; 404 si no existe.
   - `POST /users` con `{ name, email, password, role?, active?, birthDate?, degree?, lookingFor?, bio?, photo? }` responde 201 `{ user }`; 409 si el
     email existe, 422 si el cuerpo no vale.
@@ -207,3 +207,15 @@ La bitácora del Seminario 7, de donde viene este código, se conserva en el tag
   sobre una base de datos recién sembrada y sale igual.
 - Prompt de IA usado: «Ahora archivar, restaurar y eliminar para siempre usuarios. ¿Cómo lo harías? Y recuérdame cómo era esto del
   soft delete y el hard delete [...] Dame el plan de acción.»
+
+### 2026-11-03 · Filtro por titulación en el listado de usuarios
+
+- Al montar la lista de usuarios del backoffice (frontend) propusimos filtrar por rol, estado, archivados y titulación, y el
+  último no existía en la API. Se vuelve a la rama `users` y se añade `degree` a `GET /users`: Joi lo valida (texto de 100
+  caracteres como mucho) y el service lo añade al filtro solo si viene. Tiene que coincidir entera, porque en el frontend se
+  elige de una lista.
+- Contrato, Swagger y README al día.
+- Validación ejecutada: `npm run build` y `npm run lint`; con curl, `degree=Grau en Enginyeria Aeroespacial` devuelve solo los
+  de Aeroespacial y combinado con `active=true` sigue funcionando.
+- Prompt de IA usado: «Empezamos por la lista de usuarios paginada con búsqueda y filtros [...] quiero 10 usuarios por página y
+  algunos filtros, los más típicos. ¿Qué filtros me sugieres?» (conversación del frontend).
