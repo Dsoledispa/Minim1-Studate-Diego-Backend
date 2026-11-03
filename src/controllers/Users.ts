@@ -1,21 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import UserService from '../services/UserService';
 
-// Devuelve los datos básicos de los usuarios para que el frontend
-// pueda mostrarlos y usarlos al iniciar un chat directo.
-const listUsers = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        // El service solo devuelve el id y el nombre, para no exponer otros datos personales.
-        const users = await UserService.getAllUsers();
-
-        // Devolvemos la lista dentro de la propiedad "users".
-        res.status(200).json({ users });
-    } catch (error) {
-        // El middleware de errores de Express se encarga de responder ante fallos.
-        next(error);
-    }
-};
-
 // Devuelve el usuario con sesion. Su id lo saca VerifyToken del token y lo deja en req.user:
 // por eso esta ruta no necesita ningun parametro en la URL.
 const readMe = async (req: Request, res: Response, next: NextFunction) => {
@@ -40,4 +25,4 @@ const readMe = async (req: Request, res: Response, next: NextFunction) => {
     }
 };
 
-export default { listUsers, readMe };
+export default { readMe };

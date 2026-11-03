@@ -3,7 +3,7 @@
 Este proyecto lo leen y lo mantienen estudiantes. Cuando haya dos formas de hacer algo,
 elegimos la más fácil de entender, aunque no sea la más corta ni la más eficiente.
 
-Las tareas del seminario, quién va por dónde y la bitácora están en [LOGS.md](LOGS.md).
+Las tareas del sprint, quién va por dónde y la bitácora están en [LOGS.md](LOGS.md).
 
 ## Ramas
 
