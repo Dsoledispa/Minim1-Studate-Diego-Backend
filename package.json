@@ -1,7 +1,7 @@
 {
-    "name": "ea-seminari7-jwt-websockets-backend",
+    "name": "studate-backend",
     "version": "1.0.0",
-    "description": "API REST de autores y libros del Seminario 7 de EA: Express, TypeScript y MongoDB, con JWT y WebSockets",
+    "description": "API REST de Studate (Grupo 3, EA): Express, TypeScript, MongoDB y JWT",
     "main": "src/server.ts",
     "type": "commonjs",
     "engines": {

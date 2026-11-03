@@ -15,7 +15,7 @@ const required = (name: string) => {
     return value;
 };
 
-const MONGO_URL = process.env.MONGO_URL || 'mongodb://127.0.0.1:27017/seminari7';
+const MONGO_URL = process.env.MONGO_URL || 'mongodb://127.0.0.1:27017/studate';
 
 // Origen exacto del frontend. Como el refresh token va en una cookie, CORS tiene que aceptar
 // credenciales y con credenciales no se puede usar '*'.

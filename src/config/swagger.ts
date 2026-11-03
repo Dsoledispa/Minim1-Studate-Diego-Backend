@@ -106,9 +106,9 @@ const swaggerDocument = swaggerJsdoc({
     definition: {
         openapi: '3.0.0',
         info: {
-            title: 'Library API',
+            title: 'Studate API',
             version: '1.0.0',
-            description: 'API de autores y libros del Seminari 7 (Node.js, Express, TypeScript y MongoDB).'
+            description: 'API de Studate, proyecto del Grupo 3 de EA (Node.js, Express, TypeScript y MongoDB).'
         },
         servers: [{ url: `http://localhost:${config.server.port}` }],
         tags: [

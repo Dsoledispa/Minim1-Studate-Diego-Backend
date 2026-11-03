@@ -1,23 +1,28 @@
-# Seminari 7: backend con JWT y WebSockets
+# Studate: backend
 
-API REST con dos recursos, **autores** y **libros**, organizada en capas (rutas, middleware,
-controllers, services y models). Es el backend del Seminario 7 de EA:
+API REST de [Studate](https://studateapp.blogspot.com/), la app para conocer a gente de tu propia
+universidad. Es el proyecto del Grupo 3 de EA (María Cazorla, Diego Soledispa y Miguel Ángel
+Quiroga), organizado en capas (rutas, middleware, controllers, services y models).
 
-> Backend/Frontend: JWT, WebSockets. Backend TS + Express. Frontend Angular.
+El objetivo del Sprint 1 (el mínimo 1) es el **backoffice**: la zona de administración, en la que
+solo entra un `admin`. Pide:
 
-Este repositorio parte del backend del Seminario 6, que a su vez venía del Seminario 5. Del S6 trae
-dos cambios respecto al S5: la descripción de los libros y el borrado lógico (ver
-[Soft delete](#soft-delete)). Sobre esa base, el equipo añade en este seminario:
+- Gestión de usuarios y roles, con el rol del usuario en el payload del JWT
+- Tres modelos: `User`, `Grade` (los votos de La Orla) y `Date` (las citas)
+- Paginación en el servidor
+- Archivar (borrado lógico) y eliminar para siempre (borrado físico)
+- Usuarios activos e inactivos, con un prehook de Mongoose
 
-- Autenticación con JWT: registro, login, refresh (con el refresh token en una cookie HttpOnly), logout y rutas protegidas por rol
-- Paginación en el servidor de los listados de autores y libros
-- Extra: chat con WebSockets (socket.io) con los mensajes guardados en MongoDB
+El proyecto parte del ejercicio del Seminario 7 (JWT, refresh token en cookie HttpOnly, paginación y
+WebSockets), que se guarda tal cual en el tag `seminari7-base`. De ahí se trae la autenticación, la
+estructura en capas y la forma de hacer la paginación, el borrado lógico y Swagger.
 
 El frontend Angular que consume esta API está en
-[EA-Seminari7-JWT-WebSockets-Frontend](https://github.com/Dsoledispa/EA-Seminari7-JWT-WebSockets-Frontend).
+[STUDATE---FRONTEND](https://github.com/mariacazorla/STUDATE---FRONTEND).
 
-Las tareas y la bitácora del seminario están en [LOGS.md](LOGS.md); cómo trabajamos (ramas, commits,
-pull requests), en [CONTRIBUTING.md](CONTRIBUTING.md).
+Las tareas del sprint, el contrato con el frontend y la bitácora están en [LOGS.md](LOGS.md); cómo
+trabajamos (ramas, commits, pull requests), en [CONTRIBUTING.md](CONTRIBUTING.md). El tablero del
+sprint es el [GitHub Project de Studate](https://github.com/users/mariacazorla/projects/2).
 
 ## Stack tecnológico
 
@@ -57,8 +62,8 @@ TypeScript no hace falta instalarlo aparte: viene con las dependencias del proye
 ## Clonar el proyecto
 
 ```
-git clone https://github.com/Dsoledispa/EA-Seminari7-JWT-WebSockets-Backend
-cd EA-Seminari7-JWT-WebSockets-Backend
+git clone https://github.com/mariacazorla/STUDUDATE---BACKEND.git
+cd STUDUDATE---BACKEND
 ```
 
 ## Instalar las dependencias
@@ -77,7 +82,7 @@ cp .env.example .env
 
 | Variable | Qué es | Valor por defecto |
 |---|---|---|
-| `MONGO_URL` | Dirección de tu MongoDB | `mongodb://127.0.0.1:27017/seminari7` |
+| `MONGO_URL` | Dirección de tu MongoDB | `mongodb://127.0.0.1:27017/studate` |
 | `SERVER_PORT` | Puerto en el que escucha la API | `1337` |
 | `CORS_ORIGIN` | Origen exacto del frontend (con cookies no vale `*`) | `http://localhost:4200` |
 | `NODE_ENV` | Con `production`, la cookie del refresh token se marca `Secure` (solo HTTPS) | `development` |
@@ -89,8 +94,8 @@ cp .env.example .env
 Si falta `JWT_SECRET` o `JWT_REFRESH_SECRET`, la API no arranca y dice qué variable falta. Si ya tenías
 un `.env` de antes de la autenticación, copia esas cuatro líneas de `.env.example`.
 
-Cada seminario usa su propia base de datos (`seminari7`), así los datos del S5 o del S6 no se mezclan
-con los de este. Con una base de datos nueva no hace falta `npm run migrate-indexes`: los índices ya
+Studate usa su propia base de datos (`studate`), así los datos de los seminarios no se mezclan con los
+del proyecto. Con una base de datos nueva no hace falta `npm run migrate-indexes`: los índices ya
 se crean bien desde el principio.
 
 ## Llenar la base de datos (la primera vez)
