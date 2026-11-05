@@ -99,5 +99,5 @@ Herramienta: Claude Code (Anthropic). Modelo: Claude Opus 5.5.
 
 - **Pregunta:** cómo crear, editar, archivar, restaurar y eliminar Planes con los códigos 404 y 409 correctos, solo para admin.
 - **Prompt:** «Procede, tienes mi ok» (cierre de B2, junto al que Claude propuso el plan de B3) y «OK» (aprobación del plan de B3).
-- **Incoherencias:** el borrado físico de un Date dejaba su Plan huérfano: el populate habría devuelto `date: null`.
-- **Solución:** `PlanService` devuelve `{ error }` y el controlador lo traduce a 404 o 409 con una tabla de mensajes. El Plan se edita con `save()` para que pasen los validadores del modelo. El hard delete solo se permite si el Plan está archivado, y `DateService.deleteDate` elimina también el Plan del Date.
+- **Incoherencias:** el borrado físico de un Date dejaba su Plan huérfano: el populate habría devuelto `date: null`. En las pruebas, un `POST /plans` sin body daba 500: Express 5 deja `req.body` en `undefined` y Joi lo da por bueno aunque haya campos `required`. El fallo venía de antes y también afectaba a `POST /grades` y `POST /dates`.
+- **Solución:** `PlanService` devuelve `{ error }` y el controlador lo traduce a 404 o 409 con una tabla de mensajes. El Plan se edita con `save()` para que pasen los validadores del modelo. El hard delete solo se permite si el Plan está archivado, y `DateService.deleteDate` elimina también el Plan del Date. `ValidateJoi` valida `req.body ?? {}`, así que una petición sin body responde 422.
