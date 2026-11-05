@@ -51,8 +51,11 @@ export interface PlanListQuery extends PaginationQuery {
 export const ValidateJoi = (schema: ObjectSchema) => {
     return async (req: Request, res: Response, next: NextFunction) => {
         try {
-            // Comprobamos que los datos del body cumplen el esquema
-            await schema.validateAsync(req.body);
+            // Comprobamos que los datos del body cumplen el esquema.
+            // Si la peticion llega sin body, Express 5 deja req.body en undefined, y Joi da por bueno un
+            // undefined aunque el esquema tenga campos required. Validamos {} en su lugar para que salga
+            // el 422 de siempre ("date" is required) y no un 500 en el controlador
+            await schema.validateAsync(req.body ?? {});
 
             // Si la validacion es correcta continuamos con la siguiente funcion
             next();

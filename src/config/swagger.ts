@@ -18,6 +18,8 @@ const { swagger: gradeInput } = j2s(Schemas.grade.create);
 const { swagger: gradeUpdateInput } = j2s(Schemas.grade.update);
 const { swagger: dateInput } = j2s(Schemas.date.create);
 const { swagger: dateUpdateInput } = j2s(Schemas.date.update);
+const { swagger: planInput } = j2s(Schemas.plan.create);
+const { swagger: planUpdateInput } = j2s(Schemas.plan.update);
 
 // Lo que devuelve la API no es igual a lo que se envía: lleva el _id y las fechas que
 // pone MongoDB, y el usuario nunca devuelve la contraseña.
@@ -227,6 +229,8 @@ const swaggerDocument = swaggerJsdoc({
                 DateInput: dateInput,
                 DateUpdateInput: dateUpdateInput,
                 Date: dateSchema,
+                PlanInput: planInput,
+                PlanUpdateInput: planUpdateInput,
                 Plan: planSchema
             },
             responses: {
@@ -289,6 +293,9 @@ const swaggerDocument = swaggerJsdoc({
                     },
                     { plans: [planExample], total: 2, page: 1, pages: 1 }
                 ),
+                PlanConflict: errorResponse('El Date está cerrado o ya tiene un Plan (también si está archivado)', 'Este Date ya tiene un Plan'),
+                PlanArchived: errorResponse('El Plan está archivado: hay que restaurarlo antes', 'El Plan está archivado: restáuralo antes de editarlo'),
+                PlanNotArchived: errorResponse('El Plan no está archivado (para eliminarlo, primero se archiva)', 'Archiva el Plan antes de eliminarlo'),
                 AlreadyExtended: errorResponse('La prórroga solo se puede usar una vez', 'La prórroga de este Date ya se ha usado'),
                 GradeConflict: errorResponse('Ese usuario ya ha votado ese perfil (para cambiar la nota, PUT)', 'Este usuario ya ha votado ese perfil'),
                 DateConflict: errorResponse('Ya hay un Date entre esos dos usuarios', 'Ya hay un Date entre estos dos usuarios'),

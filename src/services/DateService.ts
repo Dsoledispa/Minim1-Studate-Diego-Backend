@@ -1,5 +1,6 @@
 import DateModel, { DATE_DURATION_MS, DateStatus } from '../models/Date';
 import Grade from '../models/Grade';
+import Plan from '../models/Plan';
 import User, { AuthUser } from '../models/User';
 import type { DateListQuery } from '../middleware/Joi';
 
@@ -99,9 +100,17 @@ export const extendDate = async (dateId: string, requester: AuthUser) => {
     return { date: await date.populate(POPULATE_USERS) };
 };
 
-// Funcion que elimina un Date (borrado fisico). Solo la usa el admin
-export const deleteDate = (dateId: string) => {
-    return DateModel.findByIdAndDelete(dateId);
+// Funcion que elimina un Date (borrado fisico). Solo la usa el admin.
+// Si el Date tenia un Plan, tambien se elimina: un Plan sin su Date no tiene sentido (el populate
+// devolveria date: null y el backoffice no sabria de quien es)
+export const deleteDate = async (dateId: string) => {
+    const date = await DateModel.findByIdAndDelete(dateId);
+
+    if (date) {
+        await Plan.deleteOne({ date: date._id });
+    }
+
+    return date;
 };
 
 // Funcion que abre un Date si dos usuarios se han dado A+ mutuamente. La llama GradeService cada vez
