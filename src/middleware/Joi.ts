@@ -4,6 +4,7 @@ import { NextFunction, Request, Response } from 'express';
 
 import { DATE_STATUSES, DateStatus } from '../models/Date';
 import { GRADE_VALUES, GradeValue, IGrade } from '../models/Grade';
+import { ISpin, MAX_SPINS, PLAN_STATUSES, PlanStatus } from '../models/Plan';
 import { IUser, PHOTO_MAX_LENGTH, USER_ROLES, UserRole } from '../models/User';
 
 export interface PaginationQuery {
@@ -35,6 +36,14 @@ export interface GradeListQuery {
     limit: number;
     value?: GradeValue;
     user?: string;
+}
+
+// Los filtros del listado de Planes: la paginacion con la busqueda de texto (en el sitio de las tiradas),
+// el estado, un Date concreto y si se listan los archivados. Todos se pueden combinar en la misma ruta
+export interface PlanListQuery extends PaginationQuery {
+    status?: PlanStatus;
+    date?: string;
+    archived: boolean;
 }
 
 // Funcion que se encarga de validar los datos que llegan en una petición
@@ -97,6 +106,41 @@ const userProfile = {
     photo: Joi.string().max(PHOTO_MAX_LENGTH).pattern(PHOTO).allow('')
 };
 
+// Una tirada de la ruleta
+const spin = Joi.object<ISpin>({
+    // trim + string: un sitio vacio ('' o '   ') no es valido
+    place: Joi.string().trim().max(100).required().example('Cafetería de la EETAC'),
+
+    // Minutos a pie desde el campus: un numero entero entre 0 y 120
+    walkingMinutes: Joi.number().integer().min(0).max(120).required().example(5),
+
+    // Fecha y hora en formato ISO, como las envia el frontend
+    scheduledAt: Joi.date().iso().required().example('2026-11-12T18:00:00.000Z'),
+
+    accepted: Joi.boolean().example(false)
+});
+
+// Las tiradas de un Plan: de 1 a 3
+const spins = Joi.array().items(spin).min(1).max(MAX_SPINS).required();
+
+// Reglas que miran el Plan entero, no un campo suelto:
+//   - como mucho una tirada aceptada (el sitio elegido es uno)
+//   - un Plan confirmado tiene que tener su tirada aceptada
+// Si no se cumplen, Joi da un error con details y el ErrorHandler responde 422
+const planRules: Joi.CustomValidator<{ status?: PlanStatus; spins: ISpin[] }> = (plan, helpers) => {
+    const accepted = plan.spins.filter((item) => item.accepted).length;
+
+    if (accepted > 1) {
+        return helpers.message({ custom: 'Solo puede haber una tirada aceptada' });
+    }
+
+    if (plan.status === 'confirmed' && accepted === 0) {
+        return helpers.message({ custom: 'Un Plan confirmado necesita una tirada aceptada' });
+    }
+
+    return plan;
+};
+
 // Aqui tenemos todos los esquemas de validacion que utilizamos en la aplicacion
 export const Schemas = {
     // Validacion de los parametros de paginacion
@@ -135,6 +179,24 @@ export const Schemas = {
 
         // Solo los de este usuario (este filtro solo lo usa el admin)
         user: Joi.string().regex(OBJECT_ID)
+    }),
+
+    // Validacion de los filtros del listado de Planes
+    planList: Joi.object<PlanListQuery>({
+        page: Joi.number().integer().min(1).default(1),
+        limit: Joi.number().integer().min(1).max(100).default(5),
+
+        // Texto que se busca en el sitio de las tiradas ("cafe" encuentra "Cafetería de la EETAC")
+        search: Joi.string().trim().max(100).allow('').default(''),
+
+        // Solo los de un estado: proposing, confirmed o cancelled
+        status: Joi.string().valid(...PLAN_STATUSES),
+
+        // Solo el Plan de este Date
+        date: Joi.string().regex(OBJECT_ID),
+
+        // Por defecto se listan los no archivados; con archived=true, solo los archivados
+        archived: Joi.boolean().default(false)
     }),
 
     // Validacion de los filtros del listado de votos
@@ -240,6 +302,27 @@ export const Schemas = {
                 .required()
                 .example('ongoing')
         })
+    },
+
+    // Validaciones de los Planes del backoffice
+    plan: {
+        // Crear un Plan: el Date, las tiradas y, si se quiere, el estado (si no, proposing)
+        create: Joi.object({
+            date: Joi.string().regex(OBJECT_ID).required().example('6ab3f2fe9c500204a7d5f8b1'),
+            status: Joi.string()
+                .valid(...PLAN_STATUSES)
+                .example('proposing'),
+            spins
+        }).custom(planRules),
+
+        // Editar un Plan: el estado y las tiradas. El Date no se cambia: enviarlo da 422
+        update: Joi.object({
+            status: Joi.string()
+                .valid(...PLAN_STATUSES)
+                .required()
+                .example('confirmed'),
+            spins
+        }).custom(planRules)
     }
 };
 
@@ -257,6 +340,18 @@ export const ValidatePagination = (req: Request, res: Response, next: NextFuncti
 // Igual que ValidatePagination, pero con los filtros del listado de Dates
 export const ValidateDateList = (req: Request, res: Response, next: NextFunction) => {
     const { error, value } = Schemas.dateList.validate(req.query);
+
+    if (error) {
+        return res.status(400).json({ message: error.details[0].message });
+    }
+
+    res.locals.query = value;
+    next();
+};
+
+// Igual que ValidatePagination, pero con los filtros del listado de Planes
+export const ValidatePlanList = (req: Request, res: Response, next: NextFunction) => {
+    const { error, value } = Schemas.planList.validate(req.query);
 
     if (error) {
         return res.status(400).json({ message: error.details[0].message });
