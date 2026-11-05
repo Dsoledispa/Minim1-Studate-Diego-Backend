@@ -73,3 +73,10 @@ Prompts del examen del Mínimo 1. Las mismas entradas están también al final d
 - **Prompt:** «procede» (aprobación de F3; Claude implementa F3, la prueba contra la API real y propone el plan de F4)
 - **Incoherencias:** en la prueba real de F3, la barra de filtros heredaba el `justify-content: space-between` global y separaba los controles (lo corregimos). Para F4: el `<input type="datetime-local">` trabaja en hora local sin zona y la API guarda ISO en UTC, así que hay que convertir en los dos sentidos. Además, al editar las tiradas llegan con `_id` y Joi no lo acepta. En la prueba real, al eliminar un Date la lista de Planes seguía mostrando su Plan (que la API ya había borrado en cascada) porque `DatesList` no avisaba a `PlansList`.
 - **Solución:** `components/plan-form` (standalone) con formulario reactivo: `FormArray` de tiradas (de 1 a 3) y un validador de grupo con las mismas reglas que Joi (una sola aceptada; confirmado con aceptada). Pide el detalle con `GET /plans/:id`, crea con `POST` y edita con `PUT` enviando `SpinInput` sin `_id`. Un Plan archivado se ve en solo lectura. `plans-list` lo abre con "Nuevo Plan", "Editar" y "Ver", y recarga la página al guardar. Al eliminar un Date, `DatesList` quita el filtro de ese Date o recarga la lista de Planes (con `viewChild`).
+
+## 11. Formato de Prettier en dates-list (`fix/dates-list-format`)
+
+- **Pregunta:** dejar con el formato de Prettier los ficheros de la vista de Dates que hemos tocado.
+- **Prompt:** «Arregla lo del formato como un fix.»
+- **Incoherencias:** en el frontend había 22 ficheros que ya no cumplían Prettier antes del examen. Solo 3 (los de `dates-list`) se han tocado en el Mínimo 1.
+- **Solución:** `prettier --write` solo en `dates-list.ts`, `.html` y `.spec.ts`, en su propia rama de fix. Comprobamos que, quitando espacios, saltos de línea y comas finales, el contenido es idéntico (solo cambia el formato). Los tests, el lint y el build siguen igual. Los otros 19 ficheros no se tocan para no mezclar cambios ajenos al examen.
