@@ -3,14 +3,15 @@ import { config } from './config/config';
 import Logging from './library/Logging';
 import DateModel from './models/Date';
 import Grade from './models/Grade';
+import Plan from './models/Plan';
 import User from './models/User';
-import { gradesSeed, usersSeed } from './seed-data';
+import { gradesSeed, plansSeed, usersSeed } from './seed-data';
 import { openDateIfMutual } from './services/DateService';
 
 // Llena la base de datos con los datos de ejemplo de seed-data.ts.
 //
 //   npm run seed             inserta los datos solo si la base de datos está vacía
-//   npm run seed -- --reset  borra los usuarios, los votos y los Dates y los vuelve a insertar
+//   npm run seed -- --reset  borra los usuarios, los votos, los Dates y los Planes y los vuelve a insertar
 //
 // Siempre trabaja sobre la base de datos del .env (MONGO_URL).
 
@@ -26,7 +27,10 @@ const seed = async () => {
         const users = await User.deleteMany({});
         const grades = await Grade.deleteMany({});
         const dates = await DateModel.deleteMany({});
-        Logging.warning(`Borrados ${users.deletedCount} usuarios, ${grades.deletedCount} votos y ${dates.deletedCount} Dates`);
+        const plans = await Plan.deleteMany({});
+        Logging.warning(
+            `Borrados ${users.deletedCount} usuarios, ${grades.deletedCount} votos, ${dates.deletedCount} Dates y ${plans.deletedCount} Planes`
+        );
     }
 
     const usersInDb = await User.countDocuments();
@@ -73,6 +77,32 @@ const seed = async () => {
     }
 
     Logging.info(`Dates abiertos: ${dates.length}`);
+
+    // Los Planes del "Cambio de Aula": cada uno se pone en el Date de su pareja
+    const atDay = (inDays: number, hour: number) => {
+        const day = new Date();
+        day.setDate(day.getDate() + inDays);
+        day.setHours(hour, 0, 0, 0);
+        return day;
+    };
+
+    for (const plan of plansSeed) {
+        const pairDate = await DateModel.findOne({ users: { $all: plan.users.map(idOf) } });
+
+        if (!pairDate) {
+            throw new Error(`En seed-data.ts hay un Plan de una pareja sin Date: ${plan.users.join(' y ')}`);
+        }
+
+        await Plan.create({
+            date: pairDate._id,
+            status: plan.status,
+            deleted: Boolean(plan.archived),
+            deletedAt: plan.archived ? new Date() : undefined,
+            spins: plan.spins.map(({ inDays, hour, ...spin }) => ({ ...spin, scheduledAt: atDay(inDays, hour) }))
+        });
+    }
+
+    Logging.info(`Planes creados: ${plansSeed.length}`);
 };
 
 seed()
