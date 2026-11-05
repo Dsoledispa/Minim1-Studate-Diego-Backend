@@ -147,7 +147,7 @@ router.post('/:dateId/extend', VerifyToken, ValidateId('dateId'), controller.ext
  *   delete:
  *     tags: [Dates]
  *     summary: Elimina un Date (solo admin)
- *     description: Borrado físico.
+ *     description: Borrado físico. Si el Date tenía un Plan, también se elimina.
  *     parameters:
  *       - in: path
  *         name: dateId

@@ -1,4 +1,5 @@
 import { GradeValue } from './models/Grade';
+import type { PlanStatus } from './models/Plan';
 import { IUser } from './models/User';
 
 // Datos de ejemplo para llenar la base de datos.
@@ -223,4 +224,40 @@ export const gradesSeed: GradeSeed[] = [
     { from: 'user@example.com', to: 'clara@example.com', value: 'F' },
     { from: 'user@example.com', to: 'laia@example.com', value: 'A+' },
     { from: 'marc@example.com', to: 'pau@example.com', value: 'F' }
+];
+
+// Planes del "Cambio de Aula". Cada uno va en el Date de una pareja, que se indica con sus emails como
+// en los votos. Las fechas son relativas a hoy (inDays dias despues, a la hora hour), para que las
+// tiradas sean siempre futuras. Nerea y Marc no tienen Plan: su Date esta cerrado.
+export interface PlanSeed {
+    users: [string, string];
+    status: PlanStatus;
+    archived?: boolean;
+    spins: { place: string; walkingMinutes: number; inDays: number; hour: number; accepted?: boolean }[];
+}
+
+export const plansSeed: PlanSeed[] = [
+    {
+        users: ['laia@example.com', 'pau@example.com'],
+        status: 'confirmed',
+        spins: [
+            { place: 'Cafetería de la EETAC', walkingMinutes: 1, inDays: 1, hour: 11 },
+            { place: 'Biblioteca del Campus del Baix Llobregat', walkingMinutes: 4, inDays: 2, hour: 17, accepted: true },
+            { place: 'Parc del Canal Olímpic', walkingMinutes: 15, inDays: 3, hour: 19 }
+        ]
+    },
+    {
+        users: ['hugo@example.com', 'julia@example.com'],
+        status: 'proposing',
+        spins: [
+            { place: 'Bar de la plaça de Castelldefels', walkingMinutes: 20, inDays: 2, hour: 20 },
+            { place: 'Platja de Castelldefels', walkingMinutes: 25, inDays: 4, hour: 18 }
+        ]
+    },
+    {
+        users: ['user@example.com', 'oriol@example.com'],
+        status: 'cancelled',
+        archived: true,
+        spins: [{ place: 'Pizzeria del campus', walkingMinutes: 6, inDays: 1, hour: 21 }]
+    }
 ];

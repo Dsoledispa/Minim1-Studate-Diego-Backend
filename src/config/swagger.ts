@@ -2,6 +2,7 @@ import path from 'node:path';
 import swaggerJsdoc from 'swagger-jsdoc';
 import j2s from 'joi-to-swagger';
 import { Schemas } from '../middleware/Joi';
+import { PLAN_STATUSES } from '../models/Plan';
 import { config } from './config';
 
 // La documentación de cada endpoint está escrita en un comentario /** @openapi */
@@ -17,6 +18,8 @@ const { swagger: gradeInput } = j2s(Schemas.grade.create);
 const { swagger: gradeUpdateInput } = j2s(Schemas.grade.update);
 const { swagger: dateInput } = j2s(Schemas.date.create);
 const { swagger: dateUpdateInput } = j2s(Schemas.date.update);
+const { swagger: planInput } = j2s(Schemas.plan.create);
+const { swagger: planUpdateInput } = j2s(Schemas.plan.update);
 
 // Lo que devuelve la API no es igual a lo que se envía: lleva el _id y las fechas que
 // pone MongoDB, y el usuario nunca devuelve la contraseña.
@@ -131,6 +134,58 @@ const dateExample = {
     updatedAt: '2026-11-03T10:00:00.000Z'
 };
 
+// Una tirada de la ruleta, tal como la devuelve la API (con su _id)
+const spinSchema = {
+    type: 'object',
+    properties: {
+        _id: { type: 'string' },
+        place: { type: 'string', maxLength: 100 },
+        walkingMinutes: { type: 'integer', minimum: 0, maximum: 120 },
+        scheduledAt: { type: 'string', format: 'date-time' },
+        accepted: { type: 'boolean' }
+    }
+};
+
+// Un Plan: date llega con el Date y, dentro, los dos usuarios (populate anidado)
+const planSchema = {
+    type: 'object',
+    properties: {
+        ...storedFields,
+        date: {
+            type: 'object',
+            properties: {
+                _id: { type: 'string' },
+                users: { type: 'array', items: userSummary },
+                status: { type: 'string', enum: ['pending', 'ongoing', 'closed'] },
+                expiresAt: { type: 'string', format: 'date-time' }
+            }
+        },
+        status: { type: 'string', enum: [...PLAN_STATUSES] },
+        spins: { type: 'array', items: spinSchema, minItems: 1, maxItems: 3 },
+        deleted: { type: 'boolean', description: 'true si el Plan está archivado' },
+        deletedAt: { type: 'string', format: 'date-time' }
+    }
+};
+
+const planExample = {
+    _id: '6ab3f2fe9c500204a7d5fb01',
+    date: { _id: dateExample._id, users: dateExample.users, status: 'ongoing', expiresAt: '2026-11-06T16:00:00.000Z' },
+    status: 'confirmed',
+    spins: [
+        { _id: '6ab3f2fe9c500204a7d5fc01', place: 'Cafetería de la EETAC', walkingMinutes: 1, scheduledAt: '2026-11-06T10:00:00.000Z', accepted: false },
+        {
+            _id: '6ab3f2fe9c500204a7d5fc02',
+            place: 'Biblioteca del Campus del Baix Llobregat',
+            walkingMinutes: 4,
+            scheduledAt: '2026-11-07T16:00:00.000Z',
+            accepted: true
+        }
+    ],
+    deleted: false,
+    createdAt: '2026-11-05T10:00:00.000Z',
+    updatedAt: '2026-11-05T10:00:00.000Z'
+};
+
 const swaggerPath = (filePath: string) => filePath.replace(/\\/g, '/');
 
 const swaggerDocument = swaggerJsdoc({
@@ -147,7 +202,8 @@ const swaggerDocument = swaggerJsdoc({
             { name: 'Auth', description: 'Registro, login, renovación del token y logout' },
             { name: 'Users', description: 'Usuarios: el de la sesión, con quién abrir un Date y la gestión de usuarios del backoffice (solo admin)' },
             { name: 'Grades', description: 'Votos de La Orla: A+ o F de un usuario a otro (solo admin)' },
-            { name: 'Dates', description: 'Citas entre dos usuarios que se han dado A+ (el admin ve todas; un usuario, las suyas)' }
+            { name: 'Dates', description: 'Citas entre dos usuarios que se han dado A+ (el admin ve todas; un usuario, las suyas)' },
+            { name: 'Plans', description: 'Cambio de Aula: los Planes de un Date con las tiradas de la ruleta (solo admin)' }
         ],
         // Por defecto todas las rutas piden el token (el candado de Swagger).
         // Las rutas públicas lo quitan con security: [] en su comentario @openapi.
@@ -172,7 +228,10 @@ const swaggerDocument = swaggerJsdoc({
                 Grade: gradeSchema,
                 DateInput: dateInput,
                 DateUpdateInput: dateUpdateInput,
-                Date: dateSchema
+                Date: dateSchema,
+                PlanInput: planInput,
+                PlanUpdateInput: planUpdateInput,
+                Plan: planSchema
             },
             responses: {
                 LoginOk: okResponse(
@@ -220,6 +279,23 @@ const swaggerDocument = swaggerJsdoc({
                     },
                     { dates: [dateExample], total: 4, page: 1, pages: 1 }
                 ),
+                PlanOne: okResponse('Un Plan, con su Date y los dos usuarios', { type: 'object', properties: { plan: planSchema } }, { plan: planExample }),
+                PlanList: okResponse(
+                    'Una página de Planes y los datos de paginación',
+                    {
+                        type: 'object',
+                        properties: {
+                            plans: { type: 'array', items: planSchema },
+                            total: { type: 'integer', example: 2 },
+                            page: { type: 'integer', example: 1 },
+                            pages: { type: 'integer', example: 1 }
+                        }
+                    },
+                    { plans: [planExample], total: 2, page: 1, pages: 1 }
+                ),
+                PlanConflict: errorResponse('El Date está cerrado o ya tiene un Plan (también si está archivado)', 'Este Date ya tiene un Plan'),
+                PlanArchived: errorResponse('El Plan está archivado: hay que restaurarlo antes', 'El Plan está archivado: restáuralo antes de editarlo'),
+                PlanNotArchived: errorResponse('El Plan no está archivado (para eliminarlo, primero se archiva)', 'Archiva el Plan antes de eliminarlo'),
                 AlreadyExtended: errorResponse('La prórroga solo se puede usar una vez', 'La prórroga de este Date ya se ha usado'),
                 GradeConflict: errorResponse('Ese usuario ya ha votado ese perfil (para cambiar la nota, PUT)', 'Este usuario ya ha votado ese perfil'),
                 DateConflict: errorResponse('Ya hay un Date entre esos dos usuarios', 'Ya hay un Date entre estos dos usuarios'),
