@@ -101,3 +101,31 @@ Herramienta: Claude Code (Anthropic). Modelo: Claude Opus 5.5.
 - **Prompt:** «Procede, tienes mi ok» (cierre de B2, junto al que Claude propuso el plan de B3) y «OK» (aprobación del plan de B3).
 - **Incoherencias:** el borrado físico de un Date dejaba su Plan huérfano: el populate habría devuelto `date: null`. En las pruebas, un `POST /plans` sin body daba 500: Express 5 deja `req.body` en `undefined` y Joi lo da por bueno aunque haya campos `required`. El fallo venía de antes y también afectaba a `POST /grades` y `POST /dates`.
 - **Solución:** `PlanService` devuelve `{ error }` y el controlador lo traduce a 404 o 409 con una tabla de mensajes. El Plan se edita con `save()` para que pasen los validadores del modelo. El hard delete solo se permite si el Plan está archivado, y `DateService.deleteDate` elimina también el Plan del Date. `ValidateJoi` valida `req.body ?? {}`, así que una petición sin body responde 422.
+
+### 7. F1: mockup de la vista de Dates con los Planes (`feat/plan-mockup`)
+
+- **Pregunta:** cómo quedará la vista de Dates del admin con los dos componentes nuevos de Plan.
+- **Prompt:** «Seed reseteado. Vale, pues entonces móntame ya el mockup de la página que vamos a modificar, así te valido si me parece bien el resultado final.»
+- **Incoherencias:** para enseñar en la tabla de Dates qué Date tiene Plan habría que pedir los Planes de cada fila, una petición por Date.
+- **Solución:** `mockups/plan-dates.html`, un HTML estático con los estilos y los datos reales del seed. El botón "Plan" de cada Date filtra la lista de Planes por ese Date (`GET /plans?date=`), así que basta con una sola llamada. Los Planes salen en una sección nueva debajo de los Dates (`app-plans-list`), y el formulario y detalle (`app-plan-form`) se abre como panel en la misma vista. Todo solo para el admin.
+
+### 8. F2: modelo y PlanService del frontend (`feat/plan-service`)
+
+- **Pregunta:** cómo concentrar en un solo servicio todas las peticiones a `/plans`.
+- **Prompt:** «Tienes mi visto bueno del resultado final, procede.» (validación del mockup; Claude cierra F1 y propone el plan de F2)
+- **Incoherencias:** al editar, las tiradas llegan de la API con su `_id`, pero el esquema Joi de la tirada no lo acepta (422). Antes de enviarlas hay que quitarlo.
+- **Solución:** `models/plan.model.ts` con los tipos del Plan tal como llega con el populate y el tipo `SpinInput` (la tirada sin `_id`). `services/plan.service.ts` con las 7 llamadas: listado con `search`, `status`, `date` y `archived`, detalle, crear, editar, archivar, restaurar y eliminar. Lleva su spec de Vitest.
+
+### 9. F3: lista de Planes en la vista de Dates (`feat/plan-list`)
+
+- **Pregunta:** cómo integrar un componente standalone con la lista paginada de Planes en la vista de Dates, solo para el admin.
+- **Prompt:** «procede» (aprobación de F2; Claude cierra F2 y propone el plan de F3)
+- **Incoherencias:** en el mockup, el botón "Plan" de un Date con el Plan archivado saltaba solo a "Archivados". Con datos reales, la API filtra siempre por `archived` y no se sabe de antemano si ese Date tiene el Plan archivado. Además, el spec de `DatesList` del admin fallaría con la petición nueva a `/plans` si no se actualiza.
+- **Solución:** `components/plans-list` (standalone) con el buscador, el estado y Activos/Archivados combinados en `GET /plans`, paginación de servidor, populate de la pareja, y archivar, restaurar y eliminar con `confirm-modal`. `DatesList` lo muestra solo si `isAdmin()` y su botón "Plan" le pasa el Date con un `input()`. Si ese Date no tiene un Plan activo, la lista lo dice y avisa de que puede estar en "Archivados".
+
+### 10. F4: formulario y detalle de un Plan (`feat/plan-form`)
+
+- **Pregunta:** cómo crear, editar y ver un Plan con un componente standalone de formulario y detalle, con las tiradas como lista dinámica.
+- **Prompt:** «procede» (aprobación de F3; Claude implementa F3, la prueba contra la API real y propone el plan de F4)
+- **Incoherencias:** en la prueba real de F3, la barra de filtros heredaba el `justify-content: space-between` global y separaba los controles (lo corregimos). Para F4: el `<input type="datetime-local">` trabaja en hora local sin zona y la API guarda ISO en UTC, así que hay que convertir en los dos sentidos. Además, al editar las tiradas llegan con `_id` y Joi no lo acepta. En la prueba real, al eliminar un Date la lista de Planes seguía mostrando su Plan (que la API ya había borrado en cascada) porque `DatesList` no avisaba a `PlansList`.
+- **Solución:** `components/plan-form` (standalone) con formulario reactivo: `FormArray` de tiradas (de 1 a 3) y un validador de grupo con las mismas reglas que Joi (una sola aceptada; confirmado con aceptada). Pide el detalle con `GET /plans/:id`, crea con `POST` y edita con `PUT` enviando `SpinInput` sin `_id`. Un Plan archivado se ve en solo lectura. `plans-list` lo abre con "Nuevo Plan", "Editar" y "Ver", y recarga la página al guardar. Al eliminar un Date, `DatesList` quita el filtro de ese Date o recarga la lista de Planes (con `viewChild`).
